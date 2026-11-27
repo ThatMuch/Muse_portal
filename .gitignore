@@ -1,0 +1,13 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.apk
+*.keystore
+*.jks
+# dépendances téléchargées par tools/preparer-reveil.sh
+third_party/
+.cxx/
+# jamais de secrets
+.env
+*.token

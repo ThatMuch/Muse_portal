@@ -1,0 +1,6 @@
+{
+  global: Java_com_portalmuse_gadget_WakeWordEngine_*;
+          ww_runner_create; ww_runner_destroy; ww_runner_reset; ww_runner_feed;
+          ww_runner_ok; ww_runner_set_score_hook;
+  local: *;
+};

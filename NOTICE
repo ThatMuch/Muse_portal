@@ -1,0 +1,25 @@
+Portal Muse
+
+Contains code ported to Kotlin, and test vectors copied, from muse-gadget-sdk
+(https://github.com/facebookincubator/muse-gadget-sdk),
+commit a5f809f621c4cbdbd37336fe17e7cdb74cebf3fe.
+Copyright (c) Meta Platforms, Inc. and affiliates. Apache License 2.0 (see LICENSE).
+
+Ported files (modified: translated from Python and C to Kotlin, community pairing mode only):
+core/src/main/kotlin and app/src/main/kotlin/com/portalmuse/gadget/BlePeripheral.kt.
+
+app/src/main/cpp/muse_wakeword is a copy of the SDK's detector sources and "Hey Muse" model
+(Apache License 2.0). Training data credits are in muse_wakeword/models/ATTRIBUTION.md.
+
+The vectors core/src/test/resources/noise_wire_sdk.json and rtc_sdk.json are produced by the
+SDK's Python code with the scripts in core/src/test/tools.
+
+Some icons in app/src/main/res/drawable use paths from Google's Material Icons
+(Apache License 2.0).
+
+Downloaded by tools/preparer-reveil.sh and not included: ExecuTorch (BSD 3-Clause),
+esp-nn (Apache 2.0), esp-micro-speech-features (Apache 2.0).
+
+Weather data on the home screen comes from Open-Meteo.com.
+
+Unofficial project, not provided or endorsed by Meta.

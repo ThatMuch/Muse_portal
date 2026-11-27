@@ -1,0 +1,185 @@
+package com.portalmuse.gadget
+
+import android.app.Activity
+import android.graphics.BitmapFactory
+import android.graphics.Outline
+import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.ViewOutlineProvider
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import java.io.File
+import java.text.DateFormat
+import java.util.Date
+
+private const val IDLE_CLOSE_MS = 5 * 60_000L
+
+/** Le « Fil » : les propositions de Muse, l'une sous l'autre, chacune avec son bouton. */
+class FeedPanel(
+    private val activity: Activity,
+    root: FrameLayout,
+    /** Un bouton du fil : envoie ce message à Muse. */
+    private val onAsk: (String) -> Unit,
+    private val onVisibility: () -> Unit,
+) {
+    private val main = Handler(Looper.getMainLooper())
+    private val idle = Runnable { close() }
+    private val updated = Ui.label(activity, 18f, Ui.FAINT)
+    private val list = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(180), dp(8), dp(180), dp(48))
+    }
+    private val scroll = ScrollView(activity).apply { addView(list) }
+
+    private val panel = FrameLayout(activity).apply {
+        setBackgroundColor(Ui.PANEL)
+        isClickable = true
+        visibility = View.GONE
+        addView(scroll, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT).apply { topMargin = dp(128) })
+        val heading = LinearLayout(activity).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(Ui.label(activity, 36f).apply {
+                text = "Fil"
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(updated, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(20) })
+        }
+        addView(
+            heading,
+            FrameLayout.LayoutParams(WRAP_CONTENT, dp(64), Gravity.TOP or Gravity.START)
+                .apply { setMargins(dp(180), dp(48), 0, 0) },
+        )
+        val buttons = Ui.actions(
+            activity,
+            Ui.pill(activity, "Actualiser", Ui.SURFACE).apply { setOnClickListener { ask(REFRESH) } },
+        )
+        addView(
+            buttons,
+            FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END)
+                .apply { setMargins(0, dp(40), dp(124), 0) },
+        )
+        addView(
+            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, "Fermer").apply { setOnClickListener { close() } },
+            FrameLayout.LayoutParams(dp(64), dp(64), Gravity.TOP or Gravity.END)
+                .apply { setMargins(0, dp(48), dp(40), 0) },
+        )
+    }
+
+    init {
+        root.addView(panel, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        scroll.setOnScrollChangeListener { _, _, _, _, _ -> touched() }
+    }
+
+    val isOpen get() = panel.visibility == View.VISIBLE
+
+    fun touched() {
+        if (!isOpen) return
+        main.removeCallbacks(idle)
+        main.postDelayed(idle, IDLE_CLOSE_MS)
+    }
+
+    fun open() {
+        render()
+        panel.visibility = View.VISIBLE
+        scroll.scrollTo(0, 0)
+        touched()
+        onVisibility()
+    }
+
+    /** Un nouveau fil est arrivé pendant qu'on le regarde. */
+    fun refresh() {
+        if (isOpen) render()
+    }
+
+    fun close() {
+        if (!isOpen) return
+        main.removeCallbacks(idle)
+        panel.visibility = View.GONE
+        list.removeAllViews()
+        onVisibility()
+    }
+
+    private fun ask(message: String) {
+        close()
+        onAsk(message)
+    }
+
+    private fun render() {
+        list.removeAllViews()
+        val feed = FeedStore.load(activity)
+        updated.text = feed?.let {
+            "mis à jour " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it.savedAt))
+        }.orEmpty()
+        if (feed == null) {
+            val name = Settings(activity).museName ?: "Muse"
+            list.addView(
+                Ui.label(activity, 24f, Ui.MUTED).apply {
+                    text = "Rien pour l'instant. Touchez « Actualiser » pour demander votre fil à $name."
+                },
+                Ui.spaced(activity, top = 48),
+            )
+            return
+        }
+        for (item in feed.items) {
+            val card = LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.label(activity, 26f).apply {
+                    text = listOfNotNull(item.icon, item.title).joinToString("  ")
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                item.text?.let {
+                    addView(
+                        Ui.label(activity, 20f, Ui.MUTED).apply {
+                            text = Ui.formatted(it)
+                            setLineSpacing(0f, 1.2f)
+                        },
+                        Ui.spaced(activity, top = 8),
+                    )
+                }
+                (item.image as? File)?.let {
+                    addView(picture(it), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(14) })
+                }
+                addView(
+                    Ui.pill(activity, item.actionLabel, Ui.SURFACE).apply {
+                        textSize = 19f
+                        setOnClickListener { ask(item.actionMessage) }
+                    },
+                    LinearLayout.LayoutParams(WRAP_CONTENT, dp(64)).apply { topMargin = dp(14) },
+                )
+            }
+            list.addView(card, Ui.spaced(activity, top = 36))
+        }
+    }
+
+    private fun picture(file: File) = ImageView(activity).apply {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, options)
+        options.inJustDecodeBounds = false
+        options.inSampleSize = maxOf(1, options.outWidth / dp(480))
+        setImageBitmap(BitmapFactory.decodeFile(file.path, options))
+        adjustViewBounds = true
+        maxHeight = dp(240)
+        maxWidth = dp(480)
+        scaleType = ImageView.ScaleType.FIT_START
+        clipToOutline = true
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, dp(16).toFloat())
+            }
+        }
+    }
+
+    private fun dp(value: Int) = Ui.dp(activity, value)
+
+    private companion object {
+        const val REFRESH = "Envoie mon fil sur le Portal avec la commande feed.set, avec les images quand tu en as, " +
+            "et affiche-le."
+    }
+}

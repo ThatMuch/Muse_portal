@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; media-src data:; connect-src https://api.open-meteo.com https://geocoding-api.open-meteo.com">
+<title>Portal Muse</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { background: #000; color: #fff; font-family: sans-serif; user-select: none; }
+  button, input { font: inherit; color: inherit; }
+  button { background: none; border: 0; cursor: pointer; }
+  [hidden] { display: none !important; }
+  svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Noir et beaucoup d'air. En bas à droite, la place reste au bouton d'appel de l'application. */
+  main { height: 100%; display: flex; flex-direction: column; padding: 48px 64px 0; }
+  .hero { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: space-between; gap: 40px; }
+  #time { font-size: min(17vw, 27vh); font-weight: 200; line-height: 0.95; letter-spacing: -0.03em;
+          margin-left: -0.05em; font-variant-numeric: tabular-nums; }
+  #date { font-size: 32px; color: #8e8e93; margin-top: 12px; }
+  #date::first-letter { text-transform: uppercase; }
+
+  #now { display: block; text-align: left; margin-top: 28px; min-height: 64px; }
+  .line { display: flex; align-items: center; gap: 14px; }
+  #icon svg { width: 44px; height: 44px; display: block; }
+  #temperature { font-size: 44px; font-weight: 300; }
+  #condition { font-size: 26px; color: #d1d1d6; }
+  #details { font-size: 19px; color: #636366; margin-top: 8px; }
+  #choose { margin-top: 28px; min-height: 64px; font-size: 22px; color: #8e8e93; text-decoration: underline;
+            text-underline-offset: 6px; text-decoration-color: #3a3a3c; }
+
+  .muse { width: min(30vw, 46vh); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  /* Le bas de la vidéo se fond dans le noir : le personnage n'est pas coupé net. */
+  #avatar { width: 100%; aspect-ratio: 1; object-fit: cover;
+            -webkit-mask-image: linear-gradient(#000 82%, transparent); }
+  #listening { font-size: 17px; color: #636366; }
+
+  #days { display: grid; grid-template-columns: repeat(5, 1fr); min-height: 128px; }
+  .day { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .day .name { font-size: 18px; color: #8e8e93; text-transform: capitalize; }
+  .day:first-child .name { color: #fff; }
+  .day svg { width: 34px; height: 34px; color: #d1d1d6; }
+  .day .range { font-size: 22px; }
+  .day .low { color: #636366; margin-left: 10px; }
+
+  #timers { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  #timers button { display: flex; align-items: center; gap: 12px; background: #1c1c1e; border-radius: 32px;
+                   min-height: 64px; padding: 0 24px; font-size: 19px; color: #8e8e93; }
+  #timers b { font-size: 32px; font-weight: 400; color: #fff; font-variant-numeric: tabular-nums; }
+  .has-timers #time { font-size: min(14vw, 21vh); }
+
+  footer { height: 144px; display: flex; align-items: flex-end; padding-bottom: 52px; }
+  #shortcuts { display: flex; gap: 12px; min-width: 0; max-width: calc(100% - 208px); }
+  #shortcuts button { background: #1c1c1e; border-radius: 32px; height: 64px; padding: 0 28px; font-size: 21px;
+                      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #shortcuts button:active { background: #3a3a3c; }
+  #status { position: fixed; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: #48484a;
+            pointer-events: none; }
+
+  #picker { position: fixed; inset: 0; background: #000; padding: 72px 8vw 24px; overflow: auto; z-index: 1; }
+  #picker h1 { font-size: 32px; font-weight: 300; margin-bottom: 24px; }
+  form { display: flex; gap: 12px; }
+  input { flex: 1; min-width: 0; background: #1c1c1e; border: 0; border-radius: 32px; outline: none;
+          padding: 16px 28px; font-size: 24px; user-select: text; }
+  .action { background: #1c1c1e; border-radius: 32px; padding: 0 28px; font-size: 21px; min-height: 64px; }
+  form .action { background: #fff; color: #000; }
+  #results { display: flex; flex-direction: column; margin: 8px 0 16px; }
+  #results button { border-bottom: 1px solid #1c1c1e; padding: 18px 8px; text-align: left; font-size: 22px;
+                    min-height: 64px; }
+  #message { font-size: 19px; color: #8e8e93; margin-top: 16px; }
+  .buttons { display: flex; gap: 12px; margin-top: 8px; }
+
+  @media (orientation: portrait) {
+    .hero { flex-direction: column; justify-content: center; text-align: center; }
+    #now { text-align: center; }
+    .line { justify-content: center; }
+    #time { font-size: 28vw; }
+    .muse { width: 40vw; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <div>
+      <div id="time">--:--</div>
+      <div id="date"></div>
+      <button id="now" type="button" hidden aria-label="Changer de ville">
+        <div class="line"><span id="icon"></span><span id="temperature"></span><span id="condition"></span></div>
+        <div id="details"></div>
+      </button>
+      <button id="choose" type="button" hidden>Ajouter la météo</button>
+      <div id="timers" hidden></div>
+    </div>
+    <div class="muse">
+      <video id="avatar" hidden muted loop autoplay playsinline disableremoteplayback></video>
+      <div id="listening" hidden>Dites « Hey Muse »</div>
+    </div>
+  </section>
+  <section id="days"></section>
+  <footer><nav id="shortcuts" hidden></nav><span id="status"></span></footer>
+</main>
+
+<div id="picker" hidden>
+  <h1>Ville pour la météo</h1>
+  <form id="search">
+    <input id="query" type="search" placeholder="Nom de la ville" autocomplete="off" maxlength="80">
+    <button class="action" type="submit">Chercher</button>
+  </form>
+  <p id="message"></p>
+  <div id="results"></div>
+  <div class="buttons">
+    <button class="action" id="cancel" type="button">Annuler</button>
+    <button class="action" id="remove" type="button">Retirer la météo</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const PLACE_KEY = "meteo.ville";
+const REFRESH_MS = 15 * 60 * 1000;
+const RETRY_MS = 60 * 1000;
+// Codes météo de l'OMM, tels que les renvoie Open-Meteo : [libellé, dessin de jour, dessin de nuit].
+const CODES = {
+  0: ["Ciel dégagé", "sun", "moon"], 1: ["Plutôt dégagé", "partly", "night"],
+  2: ["Partiellement nuageux", "partly", "night"], 3: ["Couvert", "cloud"],
+  45: ["Brouillard", "fog"], 48: ["Brouillard givrant", "fog"],
+  51: ["Bruine légère", "drizzle"], 53: ["Bruine", "drizzle"], 55: ["Forte bruine", "rain"],
+  56: ["Bruine verglaçante", "rain"], 57: ["Bruine verglaçante", "rain"],
+  61: ["Pluie faible", "drizzle"], 63: ["Pluie", "rain"], 65: ["Forte pluie", "rain"],
+  66: ["Pluie verglaçante", "rain"], 67: ["Pluie verglaçante", "rain"],
+  71: ["Neige faible", "snow"], 73: ["Neige", "snow"], 75: ["Fortes chutes de neige", "snow"],
+  77: ["Grains de neige", "snow"], 80: ["Averses", "drizzle"], 81: ["Averses", "rain"], 82: ["Fortes averses", "storm"],
+  85: ["Averses de neige", "snow"], 86: ["Averses de neige", "snow"],
+  95: ["Orage", "storm"], 96: ["Orage avec grêle", "storm"], 99: ["Orage avec grêle", "storm"],
+};
+
+// Dessins au trait, dans un carré de 24.
+const HIGH_CLOUD = '<path d="M7 15h10.5a3.5 3.5 0 0 0 .4-6.98A6 6 0 0 0 6.2 7.5 3.8 3.8 0 0 0 7 15z"/>';
+const ICONS = {
+  sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  moon: '<path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.2 8.2 0 1 0 10.2 10.2z"/>',
+  partly: '<path d="M6.5 20h9.3a3.2 3.2 0 0 0 .3-6.38A5 5 0 0 0 6.5 13 3.5 3.5 0 0 0 6.5 20z"/><path d="M13.2 8.4a3.4 3.4 0 1 1 5 4M16.8 2.5v1.4M22 8h-1.4M20.5 4.3l-1 1M12.6 4.3l1 1"/>',
+  night: '<path d="M6.5 20h9.3a3.2 3.2 0 0 0 .3-6.38A5 5 0 0 0 6.5 13 3.5 3.5 0 0 0 6.5 20z"/><path d="M20.8 10.4A4.4 4.4 0 0 1 15.6 4a4.6 4.6 0 0 0-2.4 4.6"/>',
+  cloud: '<path d="M7 18h10.5a3.5 3.5 0 0 0 .4-6.98A6 6 0 0 0 6.2 10.5 3.8 3.8 0 0 0 7 18z"/>',
+  fog: '<path d="M5 8h14M3 12h18M5 16h14M8 20h8"/>',
+  drizzle: HIGH_CLOUD + '<path d="M8.5 18v1M12.5 20v1M16.5 18v1"/>',
+  rain: HIGH_CLOUD + '<path d="M9 18l-1.2 3M13 18l-1.2 3M17 18l-1.2 3"/>',
+  snow: HIGH_CLOUD + '<path d="M8.5 18.5h.01M12.5 21h.01M16.5 18.5h.01" stroke-width="2.4"/>',
+  storm: HIGH_CLOUD + '<path d="M13 16.5l-2.5 3h3l-2.5 3"/>',
+};
+
+function drawing(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.innerHTML = ICONS[name];
+  return svg;
+}
+
+const byId = (id) => document.getElementById(id);
+let refreshTimer = 0;
+let lastSuccess = null;
+let request = 0;
+
+function tick() {
+  const now = new Date();
+  byId("time").textContent = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  byId("date").textContent = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  setTimeout(tick, 1000 - now.getMilliseconds());
+}
+
+function loadPlace() {
+  try {
+    const place = JSON.parse(localStorage.getItem(PLACE_KEY));
+    return place && Number.isFinite(place.latitude) && Number.isFinite(place.longitude) ? place : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function describe(code, isDay) {
+  const entry = CODES[code] || ["", "cloud"];
+  return { label: entry[0], icon: !isDay && entry[2] ? entry[2] : entry[1] };
+}
+
+async function getJson(url) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(10000), referrerPolicy: "no-referrer" });
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  return response.json();
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  node.className = className;
+  node.textContent = text;
+  return node;
+}
+
+const degrees = (value) => Math.round(value) + "°";
+
+function render(data, place) {
+  const current = data.current;
+  const sky = describe(current.weather_code, current.is_day === 1);
+  byId("icon").replaceChildren(drawing(sky.icon));
+  byId("temperature").textContent = degrees(current.temperature_2m);
+  byId("condition").textContent = sky.label;
+  byId("details").textContent = place.name + " · ressenti " + degrees(current.apparent_temperature) +
+    " · vent " + Math.round(current.wind_speed_10m) + " km/h";
+  byId("now").hidden = false;
+
+  const daily = data.daily;
+  byId("days").replaceChildren(...daily.time.map((iso, i) => {
+    const card = element("div", "day", "");
+    const name = i === 0 ? "Aujourd'hui" :
+      new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" });
+    const range = element("div", "range", degrees(daily.temperature_2m_max[i]));
+    range.append(element("span", "low", degrees(daily.temperature_2m_min[i])));
+    card.append(element("div", "name", name), drawing(describe(daily.weather_code[i], true).icon), range);
+    return card;
+  }));
+}
+
+async function refresh() {
+  clearTimeout(refreshTimer);
+  const place = loadPlace();
+  const mine = ++request;
+  byId("choose").hidden = place !== null;
+  if (!place) {
+    byId("now").hidden = true;
+    byId("days").replaceChildren();
+    byId("status").textContent = "";
+    return;
+  }
+  let delay = REFRESH_MS;
+  try {
+    const url = "https://api.open-meteo.com/v1/forecast?" + new URLSearchParams({
+      latitude: place.latitude, longitude: place.longitude, timezone: "auto", forecast_days: 5,
+      current: "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day",
+      daily: "weather_code,temperature_2m_max,temperature_2m_min",
+    });
+    const data = await getJson(url);
+    if (mine !== request) return;
+    render(data, place);
+    lastSuccess = new Date();
+    byId("status").textContent = "Météo : Open-Meteo.com";
+  } catch (error) {
+    if (mine !== request) return;
+    console.warn("meteo", String(error));
+    delay = RETRY_MS;
+    byId("status").textContent = lastSuccess
+      ? "Météo non actualisée depuis " + lastSuccess.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+      : "Météo indisponible, nouvel essai dans une minute";
+  }
+  refreshTimer = setTimeout(refresh, delay);
+}
+
+function openPicker() {
+  byId("results").replaceChildren();
+  byId("message").textContent = "Seule la position de la ville choisie est envoyée au service météo.";
+  byId("query").value = "";
+  byId("remove").hidden = loadPlace() === null;
+  byId("picker").hidden = false;
+  byId("query").focus();
+}
+
+function closePicker() {
+  byId("query").blur();
+  byId("picker").hidden = true;
+}
+
+function choose(place) {
+  if (place) localStorage.setItem(PLACE_KEY, JSON.stringify(place));
+  else localStorage.removeItem(PLACE_KEY);
+  lastSuccess = null;
+  byId("now").hidden = true;
+  byId("days").replaceChildren();
+  closePicker();
+  refresh();
+}
+
+byId("search").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = byId("query").value.trim();
+  if (name.length < 2) return;
+  byId("query").blur();
+  byId("results").replaceChildren();
+  byId("message").textContent = "Recherche…";
+  try {
+    const url = "https://geocoding-api.open-meteo.com/v1/search?" +
+      new URLSearchParams({ name, count: 5, language: "fr", format: "json" });
+    const found = (await getJson(url)).results || [];
+    byId("message").textContent = found.length ? "Toucher la bonne ville." : "Aucune ville trouvée.";
+    byId("results").replaceChildren(...found.map((city) => {
+      const label = [city.name, city.admin1, city.country].filter(Boolean).join(", ");
+      const button = element("button", "", label);
+      button.type = "button";
+      button.addEventListener("click", () => choose({
+        name: city.name, latitude: city.latitude, longitude: city.longitude,
+      }));
+      return button;
+    }));
+  } catch (error) {
+    console.warn("recherche", String(error));
+    byId("message").textContent = "Recherche impossible. Vérifier la connexion.";
+  }
+});
+
+// Les minuteurs : le décompte est affiché ici, un toucher demande à l'application d'annuler.
+let timers = [];
+function drawTimers() {
+  const box = byId("timers");
+  box.replaceChildren(...timers.map((timer) => {
+    const left = Math.max(0, Math.ceil((timer.ends - Date.now()) / 1000));
+    const hours = Math.floor(left / 3600);
+    const clock = (hours ? hours + ":" : "") + String(Math.floor(left / 60) % 60).padStart(hours ? 2 : 1, "0") +
+      ":" + String(left % 60).padStart(2, "0");
+    const chip = element("button", "", "");
+    chip.type = "button";
+    chip.setAttribute("aria-label", "Annuler le minuteur");
+    chip.append(element("b", "", clock), element("span", "", (timer.label ? timer.label + "  " : "") + "✕"));
+    chip.addEventListener("click", () => { location.href = "portal-timer:" + timer.id; });
+    return chip;
+  }));
+  box.hidden = timers.length === 0;
+  document.body.classList.toggle("has-timers", timers.length > 0);
+}
+window.setTimers = (list) => { timers = list; drawTimers(); };
+// Redessiné seulement quand il y en a : un toucher n'est pas perdu entre deux dessins.
+setInterval(() => { if (timers.length && !document.hidden) drawTimers(); }, 1000);
+
+window.setListening = (listening) => { byId("listening").hidden = !listening; };
+
+// Appelées par l'application, qui fournit l'avatar et les boutons d'actions rapides. Un toucher
+// lui est signalé par une adresse qu'elle intercepte ; elle seule connaît le message à envoyer.
+window.setShortcuts = (labels) => {
+  const bar = byId("shortcuts");
+  bar.replaceChildren(...labels.map((label, index) => {
+    const button = element("button", "", label);
+    button.type = "button";
+    button.addEventListener("click", () => { location.href = "portal-shortcut:" + index; });
+    return button;
+  }));
+  bar.hidden = labels.length === 0;
+};
+window.setAvatar = (image, video) => {
+  const node = byId("avatar");
+  node.poster = image || "";
+  if (video) node.src = video;
+  else node.removeAttribute("src");
+  node.load();
+  node.hidden = !image && !video;
+  if (video) node.play().catch(() => {});
+};
+window.pauseAvatar = (paused) => {
+  const node = byId("avatar");
+  if (!node.getAttribute("src")) return;
+  if (paused) node.pause();
+  else node.play().catch(() => {});
+};
+
+byId("choose").addEventListener("click", openPicker);
+byId("now").addEventListener("click", openPicker);
+byId("cancel").addEventListener("click", closePicker);
+byId("remove").addEventListener("click", () => choose(null));
+// Au réveil de l'écran, les minuteries ont pu s'arrêter.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+window.addEventListener("online", refresh);
+
+tick();
+refresh();
+</script>
+</body>
+</html>
