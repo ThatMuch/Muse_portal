@@ -11,6 +11,21 @@ voice and video calls with your Muse, "Hey Muse" hands free, and a screen your M
 The app's interface is currently **in French**, and so are the code comments. Both are
 [great first contributions](CONTRIBUTING.md#good-first-contributions).
 
+## Screenshots
+
+Taken on a Portal 10" (1280 × 800), interface in French, with demo content: sample city, timer,
+messages and suggestions, and a plain blue orb where your Muse's avatar appears.
+
+![Home screen: clock, weather, a running timer, quick actions and the call button](docs/screenshots/home.png)
+
+| Written conversation | A request to approve |
+|---|---|
+| ![A written reply next to the avatar](docs/screenshots/conversation.png) | ![A question from Muse with Reject and Approve buttons](docs/screenshots/approval.png) |
+
+| Feed | More |
+|---|---|
+| ![A feed of two suggestions](docs/screenshots/feed.png) | ![Menu with Feed, Messages, Photo and Apps](docs/screenshots/more.png) |
+
 ## What it does
 
 - **Home screen**: clock, date, weather (Open-Meteo), your Muse's animated avatar, up to four quick
