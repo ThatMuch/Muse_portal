@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/ble_setup.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/ble_setup.py
 package com.portalmuse.core
 
 import org.json.JSONArray
@@ -17,7 +17,7 @@ private val PLAINTEXT_STATUSES = setOf(
 private const val DISCONNECT_AFTER_ERROR_MS = 300L
 
 interface SetupTransport {
-    /** Notifie les paquets dans l'ordre ; bloque jusqu'à leur mise en file. */
+    /** Notifies the packets in order; blocks until they are queued. */
     fun sendPackets(packets: List<ByteArray>)
     fun mtu(): Int
     fun disconnect(delayMillis: Long)
@@ -36,20 +36,19 @@ class Credentials(
     val apiUrlV2: String,
     val noiseHost: String,
 ) {
-    /** Jamais de jeton dans un journal. */
-    override fun toString() = "Credentials(<masqué>)"
+    /** Never a token in a log. */
+    override fun toString() = "Credentials(<hidden>)"
 }
 
-/** La configuration n'a pas abouti ; [status] est ce que l'app apprend. */
+/** Setup did not complete; [status] is what the app learns. */
 class ProvisionFailed(val status: String) : Exception(status)
 
 /**
- * Logique des commandes de setup derrière les caractéristiques GATT.
+ * Logic of the setup commands behind the GATT characteristics.
  *
- * [handleMessage] traite un message à la fois : le transport l'appelle depuis un seul fil, dans
- * l'ordre d'arrivée. Tous les envois passent sous un même verrou pour que les compteurs chiffrés
- * arrivent dans l'ordre. [provision] tourne sur [provisionExecutor] ; il vérifie les jetons et les
- * enregistre via `commit`, ou lève [ProvisionFailed].
+ * [handleMessage] handles one message at a time: the transport calls it from a single thread, in arrival order.
+ * All sends go through the same lock so that encrypted counters arrive in order. [provision] runs on
+ * [provisionExecutor]; it checks the tokens and saves them through `commit`, or throws [ProvisionFailed].
  */
 class SetupController(
     private val pairing: PairingSession,
@@ -68,11 +67,11 @@ class SetupController(
     private var plaintextBlocked = false
     private var provisioning = false
 
-    /** Réassemble une écriture ; renvoie le message complet à passer à [handleMessage]. */
+    /** Reassembles a write; returns the complete message to pass to [handleMessage]. */
     fun assemble(packet: ByteArray): ByteArray? = assembler.feed(packet)
 
     fun onDisconnect() {
-        log("client BLE déconnecté ; session d'appairage effacée")
+        log("BLE client disconnected; pairing session erased")
         assembler.reset()
         synchronized(stateLock) { plaintextBlocked = false }
         pairing.reset()
@@ -81,19 +80,19 @@ class SetupController(
     fun handleMessage(raw: ByteArray, decrypted: Boolean = false) {
         val command = parse(raw)
         if (command == null) {
-            log("commande JSON invalide (${raw.size} octets)")
+            log("invalid JSON command (${raw.size} bytes)")
             sendStatus("error_invalid_command")
             return
         }
         val action = command.opt("action") as? String ?: ""
-        log("RX ${action.take(40).ifEmpty { "?" }}${if (decrypted) " (chiffré)" else ""}")
+        log("RX ${action.take(40).ifEmpty { "?" }}${if (decrypted) " (encrypted)" else ""}")
         val blocked = synchronized(stateLock) { plaintextBlocked }
         when {
             !decrypted && action == "pairing_client_hello" -> handleHello(command)
             !decrypted && action == "pairing_encrypted" -> handleRecord(command)
-            // Métadonnées publiques, répondues en clair à tout moment.
+            // Public metadata, answered in clear at any time.
             action == "get_device_info" -> sendJson(deviceInfo())
-            !decrypted && blocked -> log("commande en clair ignorée après le début de l'appairage")
+            !decrypted && blocked -> log("clear command ignored after pairing started")
             !decrypted && action in SENSITIVE_ACTIONS -> sendStatus("error_encryption_required")
             decrypted && action == "pairing_client_finished" -> handleClientFinished(command)
             decrypted && action in SENSITIVE_ACTIONS && !pairing.confirmed ->
@@ -155,7 +154,7 @@ class SetupController(
             transport.disconnect(DISCONNECT_AFTER_ERROR_MS)
             return
         }
-        log("appairage confirmé (consentement dans l'app)")
+        log("pairing confirmed (consent in the app)")
         sendStatus("pairing_confirmed", generation)
     }
 
@@ -177,7 +176,7 @@ class SetupController(
         if (!ServerHosts.apiAllowed(text("api_url")) || !ServerHosts.apiAllowed(text("api_url_v2")) ||
             !ServerHosts.noiseAllowed(text("noise_host"))
         ) {
-            log("le setup désigne un serveur refusé")
+            log("the setup names a refused server")
             sendStatus("error_invalid_host")
             return
         }
@@ -195,7 +194,7 @@ class SetupController(
             sendStatus(refusal)
             return
         }
-        // Les champs Wi-Fi sont volontairement ignorés : l'appareil est déjà en ligne.
+        // Wi-Fi fields are ignored on purpose: the device is already online.
         val credentials = Credentials(
             text("access_token"), text("refresh_token"), text("username"),
             text("api_url"), text("api_url_v2"), text("noise_host"),
@@ -207,7 +206,7 @@ class SetupController(
         try {
             sendStatus("wifi_connecting", generation)
             if (!network.isOnline()) {
-                // Rester en provisioning pour que l'app puisse réessayer.
+                // Stay in provisioning so that the app can retry.
                 pairing.extendProvisioning(generation)
                 sendStatus("wifi_failed", generation)
                 return
@@ -216,19 +215,19 @@ class SetupController(
             try {
                 provision(credentials) { save -> pairing.commitProvisioning(generation, save) }
             } catch (e: ProvisionFailed) {
-                log("provisioning refusé : ${e.status}")
+                log("provisioning refused: ${e.status}")
                 sendStatus(e.status, generation)
                 transport.disconnect(500)
                 return
             } catch (e: RuntimeException) {
-                // Le type seulement : le message pourrait contenir un jeton.
-                log("provisioning interrompu : ${e.javaClass.simpleName}")
+                // The type only: the message could contain a token.
+                log("provisioning interrupted: ${e.javaClass.simpleName}")
                 sendStatus("error_storage", generation)
                 transport.disconnect(500)
                 return
             }
             sendStatus("auth_ok", generation)
-            log("configuration terminée")
+            log("configuration done")
             onComplete()
         } finally {
             synchronized(stateLock) { provisioning = false }
@@ -240,16 +239,16 @@ class SetupController(
             val envelope = pairing.encryptStatus(status, generation)
             if (envelope != null) {
                 sendLocked(envelope.toString())
-                log("TX statut chiffré : $status")
+                log("TX encrypted status: $status")
                 return
             }
             val blocked = synchronized(stateLock) { plaintextBlocked }
             if (generation != 0 || blocked || status !in PLAINTEXT_STATUSES) {
-                log("TX statut supprimé : $status")
+                log("TX status dropped: $status")
                 return
             }
             transport.sendPackets(listOf(status.toByteArray()))
-            log("TX statut : $status")
+            log("TX status: $status")
         }
     }
 
@@ -264,11 +263,11 @@ class SetupController(
         synchronized(txLock) {
             val envelope = pairing.encryptJson(message.toString())
             if (envelope == null) {
-                log("TX ${message.optString("type")} supprimé : pas de session")
+                log("TX ${message.optString("type")} dropped: no session")
                 return
             }
             sendLocked(envelope.toString())
-            log("TX ${message.optString("type")} (chiffré)")
+            log("TX ${message.optString("type")} (encrypted)")
         }
     }
 

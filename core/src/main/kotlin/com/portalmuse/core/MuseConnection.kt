@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/service.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/service.py
 package com.portalmuse.core
 
 import java.io.IOException
@@ -11,7 +11,7 @@ private const val AUTH_BACKOFF_MIN_MS = 15_000L
 private const val HEALTHY_SESSION_MS = 30_000L
 private const val HEALTHY_RECONNECT_MS = 1_000L
 private const val UNPAIRED_POLL_MS = 30_000L
-/** Les jetons d'appareil vivent environ 4 heures ; rotation à 3. */
+/** Device tokens live about 4 hours; rotation at 3. */
 private const val TOKEN_REFRESH_AGE_S = 3 * 3600L
 private const val TOKEN_RETRY_MS = 300_000L
 
@@ -19,8 +19,8 @@ interface PairingStore {
     fun load(): PairingRecord?
 
     /**
-     * Remplace (ou efface, si [updated] est nul) l'appairage, seulement s'il est encore
-     * [expected] : un appairage refait entre-temps ne doit jamais être écrasé.
+     * Replaces (or erases, if [updated] is null) the pairing, only if it is still [expected]: a pairing redone
+     * in the meantime must never be overwritten.
      */
     fun replace(expected: PairingRecord, updated: PairingRecord?): Boolean
 }
@@ -30,7 +30,7 @@ sealed class ConnectionState {
     object Connecting : ConnectionState()
     object Connected : ConnectionState()
     class Waiting(val delayMillis: Long, val reason: String) : ConnectionState()
-    /** Muse a révoqué ou retiré l'appairage. */
+    /** Muse revoked or removed the pairing. */
     object Revoked : ConnectionState()
 }
 
@@ -55,7 +55,7 @@ internal class Backoff {
     }
 }
 
-/** Attente interruptible ; renvoie vrai si [wake] l'a écourtée. */
+/** Interruptible wait; returns true if [wake] cut it short. */
 private class Pause : (Long) -> Boolean {
     private val lock = Object()
     private var woken = false
@@ -76,7 +76,7 @@ private class Pause : (Long) -> Boolean {
     }
 }
 
-/** Boucle permanente : rotation des jetons, choix de la VM, session, reconnexion. */
+/** Permanent loop: token rotation, VM selection, session, reconnection. */
 class MuseConnection(
     private val store: PairingStore,
     private val api: MuseApi,
@@ -95,7 +95,7 @@ class MuseConnection(
 
     @Volatile private var stopped = false
     @Volatile private var current: ActiveSession? = null
-    /** Compte les demandes de coupure, pour ne pas garder une session ouverte pendant l'une d'elles. */
+    /** Counts the requests to cut, so as not to keep a session open during one of them. */
     private val drops = AtomicInteger()
 
     fun stop() {
@@ -103,13 +103,13 @@ class MuseConnection(
         drop()
     }
 
-    /** Le réseau est revenu ou l'appairage a changé : repartir tout de suite. */
+    /** The network is back or the pairing changed: start again at once. */
     fun wake() {
         backoff.reset()
         pause.wake()
     }
 
-    /** Le réseau est perdu ou l'appairage a changé : fermer la session en cours. */
+    /** The network is lost or the pairing changed: close the current session. */
     fun drop() {
         drops.incrementAndGet()
         current?.stop()
@@ -129,18 +129,21 @@ class MuseConnection(
                 onState(ConnectionState.Connecting)
                 pairing = maybeRefresh(pairing, force = false)
                 if (pairing == null) {
-                    if (store.load() != null) wait(TOKEN_RETRY_MS, "renouvellement des jetons en échec")
+                    if (store.load() != null) wait(TOKEN_RETRY_MS, tr(
+                        "token refresh failed",
+                        "renouvellement des jetons en échec",
+                    ))
                     continue
                 }
                 val lookup = api.fetchVms(pairing.accessToken, pairing.apiUrlV2, log)
                 if (lookup.status == 401) {
-                    log("jeton d'appareil refusé ; renouvellement")
+                    log("device token refused; refreshing")
                     if (maybeRefresh(pairing, force = true) == null) {
-                        if (store.load() != null) wait(TOKEN_RETRY_MS, "jeton refusé")
+                        if (store.load() != null) wait(TOKEN_RETRY_MS, tr("token refused", "jeton refusé"))
                     } else if (tokenRejected) {
-                        // Un seul essai immédiat : des refus répétés ne doivent pas tourner à vide.
+                        // A single immediate attempt: repeated refusals must not spin.
                         backoff.floor = AUTH_BACKOFF_MIN_MS
-                        wait(backoff.nextDelay(), "jeton refusé")
+                        wait(backoff.nextDelay(), tr("token refused", "jeton refusé"))
                     }
                     tokenRejected = true
                     continue
@@ -148,14 +151,14 @@ class MuseConnection(
                 tokenRejected = false
                 val vm = lookup.vms.firstOrNull { it.isDefault } ?: lookup.vms.firstOrNull()
                 if (vm == null) {
-                    wait(backoff.nextDelay(), "aucune machine Muse disponible")
+                    wait(backoff.nextDelay(), tr("no Muse machine available", "aucune machine Muse disponible"))
                     continue
                 }
                 session(pairing, vm)
             } catch (e: RuntimeException) {
-                // La boucle ne meurt jamais ; le type seulement dans le journal.
-                log("erreur de connexion : ${e.javaClass.simpleName}")
-                if (!stopped) wait(backoff.nextDelay(), "erreur interne")
+                // The loop never dies; the type only in the log.
+                log("connection error: ${e.javaClass.simpleName}")
+                if (!stopped) wait(backoff.nextDelay(), tr("internal error", "erreur interne"))
             }
         }
     }
@@ -172,27 +175,30 @@ class MuseConnection(
             if (stopped || drops.get() != dropsBefore) session.stop()
             session.run()
         } catch (e: UpgradeRejected) {
-            log("la VM a refusé la connexion : HTTP ${e.status}")
+            log("the VM refused the connection: HTTP ${e.status}")
             if (e.status == 401) Outcome.AUTH_REJECTED else Outcome.FORBIDDEN
         } catch (e: IOException) {
-            log("session en échec : ${e.message}")
+            log("session failed: ${e.message}")
             Outcome.CLOSED
         } finally {
             current = null
         }
         val healthy = registeredAt?.let { monotonicMillis() - it >= HEALTHY_SESSION_MS } == true
-        log("session terminée : ${outcome.name}")
+        log("session ended: ${outcome.name}")
         if (stopped) return
         if (outcome == Outcome.UNPAIRED) {
             if (store.replace(pairing, null)) onState(ConnectionState.Revoked)
             return
         }
         if (healthy) backoff.reset()
-        // Session coupée volontairement (réseau, appairage) : la boucle repart sans pénalité.
+        // Session cut on purpose (network, pairing): the loop starts again without penalty.
         if (outcome == Outcome.STOPPED) return wait(HEALTHY_RECONNECT_MS, "reconnexion")
         if (outcome == Outcome.AUTH_REJECTED || outcome == Outcome.FORBIDDEN) backoff.floor = AUTH_BACKOFF_MIN_MS
         val delay = if (healthy && outcome == Outcome.CLOSED) HEALTHY_RECONNECT_MS else backoff.nextDelay()
-        wait(delay, if (outcome == Outcome.CLOSED) "connexion coupée" else "connexion refusée")
+        wait(delay, if (outcome == Outcome.CLOSED) tr("connection cut", "connexion coupée") else tr(
+            "connection refused",
+            "connexion refusée",
+        ))
     }
 
     private fun wait(delay: Long, reason: String) {
@@ -201,8 +207,8 @@ class MuseConnection(
     }
 
     /**
-     * L'appairage courant, après rotation des jetons si elle est due. `null` : ne pas se servir de
-     * l'ancien jeton pour l'instant (l'appairage est effacé s'il a été révoqué).
+     * The current pairing, after rotating the tokens if due. `null`: do not use the old token for now (the
+     * pairing is erased if it was revoked).
      */
     private fun maybeRefresh(pairing: PairingRecord, force: Boolean): PairingRecord? {
         if (!force) {
@@ -216,20 +222,20 @@ class MuseConnection(
         if (tokens != null) {
             val updated = pairing.rotated(tokens.accessToken, tokens.refreshToken, nowSeconds())
             if (!store.replace(pairing, updated)) {
-                log("jetons renouvelés non enregistrés (appairage modifié ou stockage en échec)")
+                log("refreshed tokens not saved (pairing changed or storage failed)")
                 return null
             }
-            log("jetons d'appareil renouvelés")
+            log("device tokens refreshed")
             return updated
         }
         if (result.status == 401) {
             if (store.replace(pairing, null)) {
-                log("appairage révoqué : appairer à nouveau")
+                log("pairing revoked: pair again")
                 onState(ConnectionState.Revoked)
             }
             return null
         }
-        // Échec passager : garder le jeton actuel tant qu'il marche.
+        // Passing failure: keep the current token while it works.
         return if (force) null else pairing
     }
 }

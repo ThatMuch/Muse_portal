@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/link_client.py (connexion WebSocket)
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/link_client.py (WebSocket connection)
 package com.portalmuse.core
 
 import okhttp3.Interceptor
@@ -21,8 +21,8 @@ private const val CONNECT_TIMEOUT_S = 20L
 private const val PING_INTERVAL_S = 20L
 private val CLOSED = ByteArray(0)
 
-/** La VM a refusé le jeton à l'ouverture (401 ou 403) : ne pas réessayer le même. */
-class UpgradeRejected(val status: Int) : IOException("ouverture refusée : HTTP $status")
+/** The VM refused the token when opening (401 or 403): do not retry the same one. */
+class UpgradeRejected(val status: Int) : IOException("opening refused: HTTP $status")
 
 class OkHttpFrameSocket private constructor() : FrameSocket {
     private val inbox = LinkedBlockingQueue<ByteArray>()
@@ -32,7 +32,7 @@ class OkHttpFrameSocket private constructor() : FrameSocket {
 
     override fun receive(timeoutMillis: Long): ByteArray? {
         val data = if (timeoutMillis > 0) {
-            inbox.poll(timeoutMillis, TimeUnit.MILLISECONDS) ?: throw SocketTimeoutException("aucune réponse")
+            inbox.poll(timeoutMillis, TimeUnit.MILLISECONDS) ?: throw SocketTimeoutException("no response")
         } else {
             inbox.take()
         }
@@ -49,7 +49,7 @@ class OkHttpFrameSocket private constructor() : FrameSocket {
     }
 
     companion object {
-        /** Bloque jusqu'à l'ouverture. Le jeton voyage dans l'en-tête `Authorization`. */
+        /** Blocks until open. The token travels in the `Authorization` header. */
         @Throws(IOException::class)
         fun connect(client: OkHttpClient, url: String, bearer: String, userAgent: String): OkHttpFrameSocket {
             val result = OkHttpFrameSocket()
@@ -77,14 +77,15 @@ class OkHttpFrameSocket private constructor() : FrameSocket {
                     failure = if (code == 401 || code == 403) {
                         UpgradeRejected(code)
                     } else {
-                        // Le type seulement : le message peut contenir l'adresse complète.
-                        IOException("connexion impossible : ${t.javaClass.simpleName}${code?.let { " (HTTP $it)" } ?: ""}")
+                        // The type only: the message may contain the full address.
+                        IOException("connection failed: " +
+                            "${t.javaClass.simpleName}${code?.let { " (HTTP $it)" } ?: ""}")
                     }
                     result.inbox.add(CLOSED)
                     opened.countDown()
                 }
             }
-            // Pas de compression, comme le client du SDK ; pas de redirection avec un jeton.
+            // No compression, like the SDK client; no redirect with a token.
             val noCompression = Interceptor { chain ->
                 chain.proceed(chain.request().newBuilder().removeHeader("Sec-WebSocket-Extensions").build())
             }
@@ -101,12 +102,12 @@ class OkHttpFrameSocket private constructor() : FrameSocket {
                     .header("User-Agent", userAgent)
                     .build()
             } catch (e: IllegalArgumentException) {
-                throw IOException("adresse ou jeton mal formé")
+                throw IOException("malformed address or token")
             }
             result.socket = webSocketClient.newWebSocket(request, listener)
             if (!opened.await(CONNECT_TIMEOUT_S + 5, TimeUnit.SECONDS)) {
                 result.close()
-                throw SocketTimeoutException("ouverture trop longue")
+                throw SocketTimeoutException("opening took too long")
             }
             failure?.let { throw it }
             return result

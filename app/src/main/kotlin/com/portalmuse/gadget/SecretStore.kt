@@ -18,8 +18,8 @@ private const val KEYSTORE = "AndroidKeyStore"
 private const val ALIAS = "portalmuse_secrets"
 
 /**
- * Secrets chiffrés en AES-GCM par une clé du Keystore Android, non exportable. Seul le chiffré
- * est écrit dans le stockage privé. Aucun service Google requis.
+ * Secrets encrypted with AES-GCM by a non-exportable Android Keystore key. Only the ciphertext is written to
+ * private storage. No Google service needed.
  */
 class SecretStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("secrets", Context.MODE_PRIVATE)
@@ -37,14 +37,14 @@ class SecretStore(context: Context) {
 
     fun deletePairing() = delete("pairing")
 
-    /** Remplace ou efface l'appairage seulement s'il n'a pas changé entre-temps. */
+    /** Replaces or erases the pairing only if it has not changed in the meantime. */
     fun replacePairing(expected: PairingRecord, updated: PairingRecord?): Boolean = synchronized(LOCK) {
         if (pairing?.refreshToken != expected.refreshToken) false
         else if (updated == null) delete("pairing")
         else savePairing(updated)
     }
 
-    /** Aller-retour sur une valeur sans intérêt, pour l'écran de statut. */
+    /** A round trip on a meaningless value, for the status screen. */
     fun selfCheck(): Boolean = write("probe", "ok") && read("probe") == "ok" && delete("probe")
 
     private fun write(name: String, value: String): Boolean = synchronized(LOCK) { seal(name, value) }
@@ -56,7 +56,7 @@ class SecretStore(context: Context) {
         val sealed = encode(cipher.iv) + ":" + encode(cipher.doFinal(value.toByteArray()))
         prefs.edit().putString(name, sealed).commit()
     } catch (e: GeneralSecurityException) {
-        Log.e(TAG, "chiffrement impossible : ${e.javaClass.simpleName}")
+        Log.e(TAG, "encryption failed: ${e.javaClass.simpleName}")
         false
     }
 
@@ -71,7 +71,7 @@ class SecretStore(context: Context) {
             cipher.updateAAD(name.toByteArray())
             String(cipher.doFinal(decode(parts[1])))
         } catch (e: GeneralSecurityException) {
-            Log.e(TAG, "déchiffrement impossible : ${e.javaClass.simpleName}")
+            Log.e(TAG, "decryption failed: ${e.javaClass.simpleName}")
             null
         } catch (e: IllegalArgumentException) {
             null
@@ -95,7 +95,7 @@ class SecretStore(context: Context) {
     }
 
     private companion object {
-        /** Commun à toutes les instances : le service et l'écran écrivent le même fichier. */
+        /** Shared by all instances: the service and the screen write the same file. */
         val LOCK = Any()
     }
 

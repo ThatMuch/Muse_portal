@@ -10,7 +10,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Portage des cas de linux/tests/test_voice_gate.py. */
+/** Port of the cases of linux/tests/test_voice_gate.py. */
 class ReplyGateTest {
     private fun audio(id: String) = JSONObject().put("type", "continuous_audio_video.delta").put("response_id", id)
     private fun speech(item: String = "current") = JSONObject().put("type", "input_audio_buffer.speech_started").put("item_id", item)

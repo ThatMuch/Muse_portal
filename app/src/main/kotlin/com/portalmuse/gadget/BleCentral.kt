@@ -39,8 +39,8 @@ private const val BASE_SUFFIX = "-0000-1000-8000-00805f9b34fb"
 private val CLIENT_CONFIGURATION = UUID.fromString("00002902$BASE_SUFFIX")
 
 /**
- * Le rôle « central » Bluetooth LE du Portal, pour les commandes de Muse. Il ne touche ni à
- * l'état de la radio ni à l'annonce d'appairage.
+ * The Portal's Bluetooth LE "central" role, for Muse's commands. It touches neither the radio state nor the
+ * pairing advertisement.
  */
 @SuppressLint("MissingPermission")
 object BleCentral {
@@ -50,12 +50,12 @@ object BleCentral {
 
     fun radio(context: Context): BleRadio = Radio(context.applicationContext)
 
-    /** La fonction est retirée, ou l'application s'arrête. */
+    /** The feature is turned off, or the app is stopping. */
     fun closeAll() {
         for (id in connections.keys.toList()) connections.remove(id)?.close()
     }
 
-    /** Une connexion ouverte, et la file des réponses de sa pile Bluetooth. */
+    /** An open connection, and the queue of answers from its Bluetooth stack. */
     private class Link(val address: String) : BluetoothGattCallback() {
         class Reply(val kind: String, val status: Int, val data: ByteArray? = null)
 
@@ -101,7 +101,7 @@ object BleCentral {
             if (notifications.size < MAX_NOTIFICATIONS) notifications.offer(characteristic.instanceId to value)
         }
 
-        /** Lance une opération et attend sa réponse ; une seule à la fois par connexion. */
+        /** Starts an operation and waits for its answer; one at a time per connection. */
         fun operation(kind: String, timeout: Long = OPERATION_MS, start: () -> Boolean): Reply {
             replies.clear()
             if (!start()) throw BleError("busy", "the Bluetooth stack refused the operation")
@@ -169,7 +169,7 @@ object BleCentral {
                 runCatching { scanner.stopScan(callback) }
             }
             if (failure != 0) throw BleError("scan_failed", "Android refused the scan (code $failure)")
-            Log.i(TAG, "bluetooth : recherche, ${found.size} appareil(s)")
+            Log.i(TAG, "bluetooth: scan, ${found.size} device(s)")
             return found.values.filter { name == null || it.name?.contains(name, ignoreCase = true) == true }
                 .sortedByDescending { it.rssi }.take(limit)
         }
@@ -193,7 +193,7 @@ object BleCentral {
                         ?: return@operation false
                     true
                 }
-                // Des échanges plus longs, quand l'appareil les accepte.
+                // Longer exchanges, when the device accepts them.
                 runCatching { link.operation("mtu", 3_000) { link.gatt.requestMtu(247) } }
             } catch (e: BleError) {
                 link.close()
@@ -201,7 +201,7 @@ object BleCentral {
             }
             val id = ++nextId
             connections[id] = link
-            Log.i(TAG, "bluetooth : connexion $id ouverte")
+            Log.i(TAG, "bluetooth: connection $id open")
             return BleConnection(id, address, link.mtu)
         }
 
@@ -280,7 +280,7 @@ object BleCentral {
                 }
                 item.value = data
                 link.operation("write") { link.gatt.writeCharacteristic(item) }
-                Log.i(TAG, "bluetooth : écriture de ${data.size} octets")
+                Log.i(TAG, "bluetooth: write of ${data.size} bytes")
                 item.instanceId
             }
         }

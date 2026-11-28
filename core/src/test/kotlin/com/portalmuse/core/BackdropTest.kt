@@ -14,7 +14,7 @@ class BackdropTest {
     private val chest = 0xFFEBE1D2.toInt()
     private val paw = 0xFF2A201C.toInt()
 
-    /** Un fond de studio en dégradé, un personnage orange au poitrail blanc, une patte sombre. */
+    /** A gradient studio background, an orange character with a white chest, a dark paw. */
     private fun picture() = IntArray(width * height) { index ->
         val x = index % width
         val y = index / width

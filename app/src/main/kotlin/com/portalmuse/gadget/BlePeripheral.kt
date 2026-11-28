@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -34,12 +35,12 @@ private val RX_UUID = UUID.fromString("4d593029-28a2-4a6e-a1f0-3c2d5e8f9b01")
 private val TX_UUID = UUID.fromString("d75dc4ca-7b2b-4e9c-8f0a-1d2e3f4a5b6c")
 private val CLIENT_CONFIG_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-/** Identifiant de société non attribué ; l'octet qui suit est le drapeau « configuré ». */
+/** Unassigned company identifier; the byte that follows is the "configured" flag. */
 private const val PAIRED_FLAG_COMPANY_ID = 0xFFFF
 
 /**
- * Serveur GATT et annonce BLE du setup, équivalent Android de `ble_server.py`.
- * Un seul téléphone à la fois. Les messages sont traités en série sur [worker].
+ * GATT server and BLE advertisement for setup, the Android equivalent of `ble_server.py`. One phone at a time.
+ * Messages are handled in order on [worker].
  */
 @SuppressLint("MissingPermission")
 class BlePeripheral(
@@ -65,7 +66,7 @@ class BlePeripheral(
     fun start(setup: SetupController) {
         controller = setup
         val opened = manager.openGattServer(context, gattCallback)
-            ?: return onFailure("serveur GATT indisponible")
+            ?: return onFailure(tr("GATT server unavailable", "serveur GATT indisponible"))
         server = opened
         val service = BluetoothGattService(SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         service.addCharacteristic(
@@ -87,7 +88,7 @@ class BlePeripheral(
             ),
         )
         service.addCharacteristic(tx)
-        if (!opened.addService(service)) onFailure("service GATT refusé")
+        if (!opened.addService(service)) onFailure(tr("GATT service refused", "service GATT refusé"))
     }
 
     fun stop() {
@@ -102,7 +103,7 @@ class BlePeripheral(
 
     private fun advertise() {
         val leAdvertiser = manager.adapter.bluetoothLeAdvertiser
-            ?: return onFailure("annonce BLE non disponible")
+            ?: return onFailure(tr("BLE advertising unavailable", "annonce BLE non disponible"))
         advertiser = leAdvertiser
         val parameters = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
@@ -110,26 +111,29 @@ class BlePeripheral(
             .setConnectable(true)
             .setTimeout(0)
             .build()
-        // 3 (drapeaux) + 18 (UUID 128 bits) + 5 (fabricant) = 26 octets sur 31.
+        // 3 (flags) + 18 (128 bit UUID) + 5 (manufacturer) = 26 bytes out of 31.
         val data = AdvertiseData.Builder()
             .addServiceUuid(ParcelUuid(SERVICE_UUID))
             .addManufacturerData(PAIRED_FLAG_COMPANY_ID, byteArrayOf(0))
             .build()
-        // Le nom (16 caractères) part dans la réponse au scan.
+        // The name (16 characters) goes in the scan response.
         val scanResponse = AdvertiseData.Builder().setIncludeDeviceName(true).build()
         leAdvertiser.startAdvertising(parameters, data, scanResponse, advertiseCallback)
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
-            Log.i(TAG, "annonce démarrée sous le nom ${manager.adapter.name}")
+            Log.i(TAG, "advertising started under the name ${manager.adapter.name}")
             onState("visible")
         }
 
-        override fun onStartFailure(errorCode: Int) = onFailure("annonce BLE refusée (code $errorCode)")
+        override fun onStartFailure(errorCode: Int) = onFailure(tr(
+            "BLE advertising refused (code $errorCode)",
+            "annonce BLE refusée (code $errorCode)",
+        ))
     }
 
-    // -- Envoi (appelé hors du fil des rappels GATT) ---------------------------
+    // -- Sending (called off the GATT callback thread) ---------------------------
 
     override fun mtu(): Int = synchronized(mtus) { client?.let { mtus[it.address] } ?: BleFraming.DEFAULT_ATT_MTU }
 
@@ -140,16 +144,16 @@ class BlePeripheral(
             if (index > 0) Thread.sleep(BleFraming.CHUNK_STAGGER_MS)
             lastValue = packet
             if (!subscribed) {
-                Log.w(TAG, "le téléphone n'est pas abonné aux notifications")
+                Log.w(TAG, "the phone is not subscribed to notifications")
                 continue
             }
             notificationSent.drainPermits()
             tx.value = packet
             if (!gatt.notifyCharacteristicChanged(device, tx, false)) {
-                Log.w(TAG, "notification refusée (paquet ${index + 1}/${packets.size})")
+                Log.w(TAG, "notification refused (packet ${index + 1}/${packets.size})")
                 return
             }
-            if (!notificationSent.tryAcquire(2, TimeUnit.SECONDS)) Log.w(TAG, "notification sans accusé")
+            if (!notificationSent.tryAcquire(2, TimeUnit.SECONDS)) Log.w(TAG, "notification without acknowledgement")
         }
     }
 
@@ -157,7 +161,7 @@ class BlePeripheral(
         main.postDelayed({ client?.let { server?.cancelConnection(it) } }, delayMillis)
     }
 
-    // -- Réception ---------------------------------------------------------------
+    // -- Receiving ---------------------------------------------------------------
 
     private fun deliver(packet: ByteArray) {
         val message = controller.assemble(packet) ?: return
@@ -170,8 +174,8 @@ class BlePeripheral(
             try {
                 task()
             } catch (e: Exception) {
-                // La classe seulement : un message d'erreur pourrait contenir des données reçues.
-                Log.e(TAG, "commande de setup en échec : ${e.javaClass.simpleName}")
+                // The class only: an error message could contain received data.
+                Log.e(TAG, "setup command failed: ${e.javaClass.simpleName}")
             }
         }
     }
@@ -185,12 +189,15 @@ class BlePeripheral(
     private val gattCallback = object : BluetoothGattServerCallback() {
         override fun onServiceAdded(status: Int, service: BluetoothGattService) {
             if (status == BluetoothGatt.GATT_SUCCESS) main.post { if (server != null) advertise() }
-            else onFailure("service GATT non ajouté (statut $status)")
+            else onFailure(tr(
+                "GATT service not added (status $status)",
+                "service GATT non ajouté (statut $status)",
+            ))
         }
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             val connected = newState == BluetoothProfile.STATE_CONNECTED
-            Log.i(TAG, "appareil ${if (connected) "connecté" else "déconnecté"} (statut $status)")
+            Log.i(TAG, "device ${if (connected) "connected" else "disconnected"} (status $status)")
             if (connected) return
             synchronized(mtus) { mtus.remove(device.address) }
             if (client?.address != device.address) return
@@ -203,7 +210,7 @@ class BlePeripheral(
         }
 
         override fun onMtuChanged(device: BluetoothDevice, mtu: Int) {
-            Log.i(TAG, "MTU ATT $mtu")
+            Log.i(TAG, "ATT MTU $mtu")
             synchronized(mtus) { mtus[device.address] = mtu }
         }
 
@@ -216,7 +223,7 @@ class BlePeripheral(
             if (characteristic.uuid != RX_UUID || !claim(device)) {
                 status = BluetoothGatt.GATT_FAILURE
             } else if (prepared) {
-                // Écriture longue : le téléphone dépasse le MTU et envoie en plusieurs parties.
+                // Long write: the phone exceeds the MTU and sends in several parts.
                 if (offset != preparedWrite.size()) status = BluetoothGatt.GATT_INVALID_OFFSET
                 else if (offset + bytes.size > BleFraming.MAX_MESSAGE_BYTES) {
                     status = BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH
@@ -224,9 +231,9 @@ class BlePeripheral(
             }
             if (responseNeeded) server?.sendResponse(device, requestId, status, offset, bytes)
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.w(TAG, "écriture refusée (statut $status)")
+                Log.w(TAG, "write refused (status $status)")
             } else if (!prepared) {
-                onState("téléphone connecté")
+                onState(tr("phone connected", "téléphone connecté"))
                 deliver(bytes)
             }
         }
@@ -257,7 +264,7 @@ class BlePeripheral(
             val ok = descriptor.uuid == CLIENT_CONFIG_UUID && !prepared && claim(device)
             if (ok) {
                 subscribed = value?.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == true
-                Log.i(TAG, "notifications ${if (subscribed) "activées" else "désactivées"}")
+                Log.i(TAG, "notifications ${if (subscribed) "enabled" else "disabled"}")
             }
             if (responseNeeded) {
                 val status = if (ok) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE

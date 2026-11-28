@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Sources : esp32/main/avatar_identity.c, avatar_clip_refs.c, avatar_sync.c, vm_file_path.h
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Sources:
+// esp32/main/avatar_identity.c, avatar_clip_refs.c, avatar_sync.c, vm_file_path.h
 package com.portalmuse.core
 
 import org.json.JSONException
@@ -13,18 +13,18 @@ private const val MAX_PATH_CHARS = 511
 private const val MAX_REVISION_CHARS = 127
 private const val POLL_MS = 100L
 
-/** L'avatar du Muse : une image fixe et, selon le compte, de courtes vidéos par état. */
+/** The Muse's avatar: a still picture and, depending on the account, short videos per state. */
 class Avatar(
     val imagePath: String,
     val revision: String,
     val videos: Map<String, String>,
-    /** La version pour fond sombre, quand le compte en a une. */
+    /** The version for a dark background, when the account has one. */
     val darkImagePath: String? = null,
     val darkVideos: Map<String, String> = emptyMap(),
 ) {
     /**
-     * Le jeu à afficher sur un écran sombre : la version sombre si elle a son image et sa vidéo de
-     * repos, sinon la claire. On ne mélange pas les deux, leurs fonds diffèrent.
+     * The set to show on a dark screen: the dark version if it has its picture and idle video, otherwise the
+     * light one. The two are not mixed, their backgrounds differ.
      */
     fun forDarkScreen(): Avatar =
         if (darkImagePath != null && ("idle" in darkVideos || "idle" !in videos)) {
@@ -33,14 +33,14 @@ class Avatar(
             this
         }
 
-    override fun toString() = "Avatar(vidéos=${videos.keys})"
+    override fun toString() = tr("Avatar(videos=${videos.keys})", "Avatar(vidéos=${videos.keys})")
 }
 
 sealed class AvatarIdentity {
     class Present(val avatar: Avatar) : AvatarIdentity()
-    /** Pas d'image pour l'instant ; elle peut être en cours de création. */
+    /** No picture for now; it may still be being generated. */
     object None : AvatarIdentity()
-    /** Réponse inattendue : garder ce qu'on a. */
+    /** Unexpected answer: keep what we have. */
     object Unknown : AvatarIdentity()
 }
 
@@ -78,17 +78,21 @@ object AvatarParser {
         )
     }
 
-    /** Les noms des champs reçus, pour le diagnostic. Aucune valeur. */
+    /** The names of the fields received, for diagnosis. No values. */
     fun shape(json: String): String = try {
         val avatar = JSONObject(json).optJSONObject("result")?.optJSONObject("avatar")
         fun names(value: JSONObject?) = value?.keys()?.asSequence()?.filter(NAME::matches)?.sorted()?.joinToString(",").orEmpty()
-        "avatar{${names(avatar)}} vidéos{${names(avatar?.optJSONObject("video_variants"))}} " +
-            "sombres{${names(avatar?.optJSONObject("darkmode_video_variants"))}}"
+        tr(
+            "avatar{${names(avatar)}} videos{${names(avatar?.optJSONObject("video_variants"))}} " +
+                "dark{${names(avatar?.optJSONObject("darkmode_video_variants"))}}",
+            "avatar{${names(avatar)}} vidéos{${names(avatar?.optJSONObject("video_variants"))}} " +
+                "sombres{${names(avatar?.optJSONObject("darkmode_video_variants"))}}",
+        )
     } catch (e: JSONException) {
         "illisible"
     }
 
-    /** Le chemin d'un fichier de la VM encodé comme un chemin ; `null` s'il est douteux. */
+    /** The path of a VM file encoded as a path; `null` if it is suspicious. */
     fun filePath(path: String): String? {
         val relative = path.trimStart('/')
         if (relative.isEmpty() || relative.split('/').any { it == ".." } || relative.any { it.isISOControl() }) return null
@@ -102,31 +106,31 @@ object AvatarParser {
     }
 }
 
-/** Lit la fiche et les fichiers de l'avatar par la session déjà ouverte, sans message de chat. */
+/** Reads the avatar record and files over the already open session, without a chat message. */
 class AvatarClient(
     private val streams: MuseStreams,
     private val chunkBytes: Int = 128 * 1024,
     private val timeoutMillis: Long = 30_000,
 ) {
-    /** La fiche et la description de ses champs ; `null` si elle n'a pas pu être lue. */
+    /** The record and the description of its fields; `null` if it could not be read. */
     fun identity(log: (String) -> Unit = {}): Pair<AvatarIdentity, String>? {
         val body = ByteArrayOutputStream()
         return try {
             val (status, _) = get("/identity", emptyList(), body, MAX_IDENTITY_BYTES)
             if (status !in 200..299) {
-                log("fiche refusée : HTTP $status")
+                log("record refused: HTTP $status")
                 null
             } else {
                 val text = body.toString("UTF-8")
                 AvatarParser.parse(text) to AvatarParser.shape(text)
             }
         } catch (e: IOException) {
-            log("fiche illisible : ${e.javaClass.simpleName}")
+            log("record unreadable: ${e.javaClass.simpleName}")
             null
         }
     }
 
-    /** Écrit le fichier entier dans [out] ; faux s'il est refusé, incomplet ou trop grand. */
+    /** Writes the whole file to [out]; false if refused, incomplete or too large. */
     fun download(path: String, maxBytes: Int, out: OutputStream, log: (String) -> Unit = {}): Boolean {
         val target = AvatarParser.filePath(path) ?: return false
         var offset = 0
@@ -134,24 +138,24 @@ class AvatarClient(
         try {
             while (true) {
                 val part = ByteArrayOutputStream()
-                // Comme le firmware : une fois la taille connue, ne rien demander au-delà.
+                // As in the firmware: once the size is known, ask for nothing beyond it.
                 val end = minOf(offset + chunkBytes, size ?: Int.MAX_VALUE) - 1
                 val (status, headers) = get(target, listOf("Range" to "bytes=$offset-$end"), part, maxBytes)
                 val total = headers["content-range"]?.substringAfterLast('/')?.toIntOrNull()
-                if (total != null && total > maxBytes) return fail(log, "fichier trop grand")
+                if (total != null && total > maxBytes) return fail(log, "file too large")
                 size = total ?: size
                 if (status == 200 && offset == 0) {
                     part.writeTo(out)
                     return part.size() > 0
                 }
-                // Sans taille annoncée, la fin se découvre en demandant au-delà.
+                // Without an announced size, the end is found by asking beyond it.
                 if (status == 416 && total == null && offset > 0) return true
                 if (status != 206 || part.size() == 0 || part.size() > chunkBytes) return fail(log, "HTTP $status")
-                if (offset + part.size() > maxBytes) return fail(log, "fichier trop grand")
+                if (offset + part.size() > maxBytes) return fail(log, "file too large")
                 part.writeTo(out)
                 offset += part.size()
                 if (total != null && offset >= total) return offset == total
-                // Une réponse plus courte que demandé finit le fichier, sauf si sa taille dit le contraire.
+                // An answer shorter than requested ends the file, unless its size says otherwise.
                 if (total == null && part.size() < chunkBytes) return true
             }
         } catch (e: IOException) {
@@ -160,7 +164,7 @@ class AvatarClient(
     }
 
     private fun fail(log: (String) -> Unit, reason: String): Boolean {
-        log("téléchargement interrompu : $reason")
+        log("download interrupted: $reason")
         return false
     }
 
@@ -174,9 +178,9 @@ class AvatarClient(
             while (true) {
                 val chunk = stream.read(POLL_MS) ?: break
                 if (chunk.isNotEmpty()) quiet = System.nanoTime()
-                if ((System.nanoTime() - quiet) / 1_000_000 > timeoutMillis) throw IOException("réponse interrompue")
+                if ((System.nanoTime() - quiet) / 1_000_000 > timeoutMillis) throw IOException("answer interrupted")
                 out.write(chunk)
-                if (out.size() > maxBytes) throw IOException("réponse trop grande")
+                if (out.size() > maxBytes) throw IOException("answer too large")
             }
             return status to stream.headers
         } finally {

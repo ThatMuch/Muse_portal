@@ -15,20 +15,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 private const val TAG = "PortalMuse"
-/** Assez de MP3 pour commencer à lire pendant que la suite arrive. */
+/** Enough MP3 to start playing while the rest arrives. */
 private const val START_BYTES = 24 * 1024
 private const val MAX_PLAY_MS = 5 * 60_000L
 private const val END = ""
 
 /**
- * Lit à voix haute les messages d'une réponse, l'un après l'autre, à mesure qu'ils sont
- * annoncés. Les méthodes s'appellent du fil principal.
+ * Reads the messages of a reply aloud, one after the other, as they are announced. Methods are called from the
+ * main thread.
  */
 class SpeechPlayer {
-    /** [status] : le statut HTTP d'un refus, `null` si tout s'est lu ou en cas de coupure. */
+    /** [status]: the HTTP status of a refusal, `null` if everything was read or on a cut. */
     class Outcome(val played: Boolean, val status: Int?)
 
-    /** Une lecture : la file des messages, `null` pour dire qu'il n'en viendra plus. */
+    /** One playback: the queue of messages, `null` meaning no more will come. */
     private class Reading {
         val stopped = AtomicBoolean()
         val queue = LinkedBlockingQueue<String>()
@@ -39,7 +39,7 @@ class SpeechPlayer {
     private val main = Handler(Looper.getMainLooper())
     private var current: Reading? = null
 
-    /** Ajoute un message ; sans effet s'il est déjà prévu. */
+    /** Adds a message; no effect if it is already queued. */
     fun add(chat: MuseChat, messageId: String) {
         val reading = current ?: Reading().also { created ->
             current = created
@@ -48,7 +48,7 @@ class SpeechPlayer {
         if (reading.known.add(messageId)) reading.queue.put(messageId)
     }
 
-    /** Plus rien à ajouter : [onDone] est appelé après le dernier message lu. */
+    /** Nothing more to add: [onDone] is called after the last message is read. */
     fun finish(onDone: (Outcome) -> Unit) {
         val reading = current ?: return onDone(Outcome(false, null))
         reading.onDone = onDone
@@ -73,7 +73,7 @@ class SpeechPlayer {
             outcome = try {
                 speak(chat, id, reading.stopped)
             } catch (e: RuntimeException) {
-                Log.w(TAG, "voix : lecture en échec (${e.javaClass.simpleName})")
+                Log.w(TAG, "voice: playback failed (${e.javaClass.simpleName})")
                 Outcome(false, null)
             }
             failed = !outcome.played
@@ -86,7 +86,7 @@ class SpeechPlayer {
         }
     }
 
-    /** Bloque jusqu'à la fin de la lecture ou l'arrêt. */
+    /** Blocks until the end of playback or until stopped. */
     private fun speak(chat: MuseChat, id: String, stopped: AtomicBoolean): Outcome {
         val audio = GrowingAudio()
         var status: Int? = null
@@ -99,16 +99,16 @@ class SpeechPlayer {
             if (stopped.get()) return Outcome(false, null)
             if (audio.length == 0) {
                 download.join(1_000)
-                Log.i(TAG, "voix : aucun son (HTTP $status)")
+                Log.i(TAG, "voice: no sound (HTTP $status)")
                 return Outcome(false, status?.takeIf { it !in 200..299 })
             }
             var played = playThrough(audio, stopped)
             if (!played && !stopped.get()) {
-                // La lecture au fil de l'eau a échoué : nouvel essai une fois tout arrivé.
+                // Playing on the fly failed: try again once everything has arrived.
                 download.join(MAX_PLAY_MS)
                 played = playThrough(audio, stopped)
             }
-            Log.i(TAG, "voix : ${audio.length / 1024} Ko, ${if (played) "lus" else "non lus"}")
+            Log.i(TAG, "voice: ${audio.length / 1024} KB, ${if (played) "played" else "not played"}")
             return Outcome(played, null)
         } finally {
             audio.dismiss()
@@ -129,19 +129,19 @@ class SpeechPlayer {
                 ended.countDown()
             }
             player.setOnErrorListener { _, what, extra ->
-                Log.w(TAG, "voix : lecteur en échec ($what, $extra)")
+                Log.w(TAG, "voice: player failed ($what, $extra)")
                 ended.countDown()
                 true
             }
             player.setDataSource(audio)
             player.prepare()
             player.start()
-            Log.i(TAG, "voix : lecture démarrée")
+            Log.i(TAG, "voice: playback started")
             val deadline = System.currentTimeMillis() + MAX_PLAY_MS
             while (!stopped.get() && System.currentTimeMillis() < deadline) {
                 if (ended.await(100, TimeUnit.MILLISECONDS)) break
             }
-            if (stopped.get()) Log.i(TAG, "voix : interrompue après ${player.currentPosition} ms")
+            if (stopped.get()) Log.i(TAG, "voice: interrupted after ${player.currentPosition} ms")
             completed.get()
         } catch (e: IOException) {
             false
@@ -152,7 +152,7 @@ class SpeechPlayer {
         }
     }
 
-    /** Le MP3 reçu jusqu'ici : le lecteur attend la suite tant qu'elle peut venir. */
+    /** The MP3 received so far: the player waits for more as long as it may come. */
     private class GrowingAudio : MediaDataSource() {
         private val lock = Object()
         private var bytes = ByteArray(64 * 1024)
@@ -187,7 +187,7 @@ class SpeechPlayer {
 
         override fun getSize(): Long = synchronized(lock) { if (finished) length.toLong() else -1L }
 
-        /** Appelé par chaque lecteur qui se libère : la source doit pouvoir resservir. */
+        /** Called by each player being released: the source must be reusable. */
         override fun close() = Unit
 
         fun dismiss() = synchronized(lock) {

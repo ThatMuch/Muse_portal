@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
@@ -19,29 +20,29 @@ import com.portalmuse.core.CallFailure
 import com.portalmuse.core.CallResult
 
 private const val MICROPHONE_REQUEST = 8
-/** Le temps de lire pourquoi l'appel s'est terminé, avant de revenir à l'accueil. */
+/** Time to read why the call ended, before going back to the home screen. */
 private const val AFTER_END_MS = 3_000L
 private const val AFTER_FAILURE_MS = 12_000L
 private const val SHOWN_LINES = 12
 
-/** L'écran d'appel : état, durée, ce que dit Muse, « Interrompre » et « Raccrocher ». */
+/** The call screen: state, duration, what Muse says, "Interrupt" and "Hang up". */
 class CallPanel(
     private val activity: Activity,
     root: FrameLayout,
-    /** L'utilisateur a touché « Raccrocher ». */
+    /** The user touched "Hang up". */
     private val onHangUp: () -> Unit,
     private val onVisibility: () -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val settings = Settings(activity)
     private var call: MuseCall? = null
-    /** Un appel raccroché qui n'a pas encore rendu le micro. */
+    /** A hung-up call that has not released the microphone yet. */
     private var releasing: MuseCall? = null
     private var connectedAt = 0L
     private var speaking = false
     private var wakeCall = false
     private var videoCall = false
-    /** La conversation à l'écran, une entrée par tour : jamais enregistrée ni journalisée. */
+    /** The conversation on screen, one entry per turn: never saved or logged. */
     private class Line(val fromUser: Boolean, var text: String, var ignored: Boolean = false)
     private val lines = LinkedHashMap<String, Line>()
     private var museTurns = 0
@@ -66,18 +67,24 @@ class CallPanel(
         setFadingEdgeLength(Ui.dp(activity, 48))
         addView(words)
     }
-    private val interrupt = Ui.pill(activity, "Interrompre", Ui.SURFACE).apply { setOnClickListener { call?.interrupt() } }
-    private val hangUp = Ui.round(activity, R.drawable.ic_hang_up, Ui.DANGER, "Raccrocher").apply {
+    private val interrupt = Ui.pill(activity, tr(
+        "Interrupt",
+        "Interrompre",
+    ), Ui.SURFACE).apply { setOnClickListener { call?.interrupt() } }
+    private val hangUp = Ui.round(activity, R.drawable.ic_hang_up, Ui.DANGER, tr("Hang up", "Raccrocher")).apply {
         setOnClickListener { endRequested() }
     }
-    private val again = Ui.round(activity, R.drawable.ic_phone, Ui.CALL, "Rappeler").apply { setOnClickListener { open() } }
-    private val dismiss = Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, "Fermer").apply {
+    private val again = Ui.round(activity, R.drawable.ic_phone, Ui.CALL, tr(
+        "Call again",
+        "Rappeler",
+    )).apply { setOnClickListener { open() } }
+    private val dismiss = Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, tr("Close", "Fermer")).apply {
         setOnClickListener { close() }
     }
 
     private val screen = VideoScreen(activity)
     private val videoLabel = Ui.label(activity, 22f, Ui.MUTED)
-    /** L'appel vidéo : l'image de Muse en grand, l'état dans un coin, un bouton pour raccrocher. */
+    /** The video call: Muse's picture, large, the state in a corner, one button to hang up. */
     private val videoLayer = FrameLayout(activity).apply {
         setBackgroundColor(Ui.PANEL)
         visibility = View.GONE
@@ -88,7 +95,7 @@ class CallPanel(
                 .apply { setMargins(Ui.dp(activity, 64), Ui.dp(activity, 56), 0, 0) },
         )
         addView(
-            Ui.round(activity, R.drawable.ic_hang_up, Ui.DANGER, "Raccrocher").apply {
+            Ui.round(activity, R.drawable.ic_hang_up, Ui.DANGER, tr("Hang up", "Raccrocher")).apply {
                 setOnClickListener { endRequested() }
             },
             FrameLayout.LayoutParams(Ui.dp(activity, 88), Ui.dp(activity, 88), Gravity.BOTTOM or Gravity.START)
@@ -125,7 +132,7 @@ class CallPanel(
 
     fun reloadAvatar() = avatar.reload()
 
-    /** Ouvre l'écran et appelle. [wakeMic] : ouvert à la voix, le micro capte déjà. */
+    /** Opens the screen and calls. [wakeMic]: opened by voice, the microphone is already capturing. */
     fun open(wakeMic: WakeMic? = null, video: Boolean = settings.videoCalls) {
         wakeCall = wakeMic != null
         main.removeCallbacks(autoClose)
@@ -140,7 +147,10 @@ class CallPanel(
         museOpen = null
         if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             wakeMic?.close()
-            stopped("Autorisation du micro nécessaire pour appeler.", AFTER_FAILURE_MS)
+            stopped(tr(
+                "Allow the microphone to make calls.",
+                "Autorisation du micro nécessaire pour appeler.",
+            ), AFTER_FAILURE_MS)
             activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MICROPHONE_REQUEST)
             return
         }
@@ -149,7 +159,7 @@ class CallPanel(
             return
         }
         videoCall = video
-        status.text = if (wakeCall) "Je vous écoute, parlez…" else "Connexion…"
+        status.text = if (wakeCall) tr("I'm listening, go ahead…", "Je vous écoute, parlez…") else "Connexion…"
         show(interrupt = false, inCall = true)
         showVideo(video)
         lateinit var started: MuseCall
@@ -178,7 +188,7 @@ class CallPanel(
         if (requestCode == MICROPHONE_REQUEST && granted && isOpen) open()
     }
 
-    /** Raccroche s'il y a un appel, puis ferme. */
+    /** Hangs up if there is a call, then closes. */
     fun close() {
         call?.let {
             releasing = it
@@ -193,7 +203,7 @@ class CallPanel(
         onVisibility()
     }
 
-    /** Retour immédiat à l'accueil ; la fin de l'appel continue en arrière-plan. */
+    /** Back to the home screen at once; the end of the call carries on in the background. */
     private fun endRequested() {
         close()
         onHangUp()
@@ -201,9 +211,12 @@ class CallPanel(
 
     private fun showVideo(shown: Boolean) {
         videoLayer.visibility = if (shown) View.VISIBLE else View.GONE
-        videoLabel.text = if (wakeCall) "$name\nJe vous écoute, parlez…" else "$name\nConnexion…"
+        videoLabel.text = if (wakeCall) tr(
+            "$name\nI'm listening, go ahead…",
+            "$name\nJe vous écoute, parlez…",
+        ) else "$name\nConnexion…"
         if (shown) screen.start() else screen.stop()
-        // L'avatar n'a pas à jouer derrière la vidéo.
+        // The avatar has no reason to play behind the video.
         if (shown) avatar.active = false
     }
 
@@ -214,14 +227,20 @@ class CallPanel(
         dismiss.visibility = if (inCall) View.GONE else View.VISIBLE
     }
 
-    /** En vidéo, il n'y a ni transcription ni bouton pour interrompre. */
+    /** In video, there is no transcript and no button to interrupt. */
     private fun receivedVideo(event: CallEvent) {
         when (event) {
             CallEvent.Connected -> {
                 connectedAt = SystemClock.elapsedRealtime()
-                videoLabel.text = if (call?.silentSpeaker == true) "$name\nLe volume est à zéro" else "$name\nÀ vous"
+                videoLabel.text = if (call?.silentSpeaker == true) tr(
+                    "$name\nThe volume is at zero",
+                    "$name\nLe volume est à zéro",
+                ) else tr("$name\nYour turn", "$name\nÀ vous")
             }
-            is CallEvent.Speaking -> videoLabel.text = if (event.speaking) "$name\nvotre micro est coupé" else "$name\nÀ vous"
+            is CallEvent.Speaking -> videoLabel.text = if (event.speaking) tr(
+                "$name\nyour microphone is muted",
+                "$name\nvotre micro est coupé",
+            ) else tr("$name\nYour turn", "$name\nÀ vous")
             else -> Unit
         }
     }
@@ -240,9 +259,9 @@ class CallPanel(
                 avatar.state = if (speaking) AvatarView.State.SPEAKING else AvatarView.State.IDLE
                 if (speaking) {
                     status.text = if (call?.silentSpeaker == true) {
-                        "Le volume du Portal est à zéro"
+                        tr("The Portal's volume is at zero", "Le volume du Portal est à zéro")
                     } else {
-                        "$name parle · votre micro est coupé"
+                        tr("$name is speaking · your microphone is muted", "$name parle · votre micro est coupé")
                     }
                     show(interrupt = true, inCall = true)
                 } else {
@@ -261,7 +280,7 @@ class CallPanel(
                 render()
             }
             is CallEvent.Heard -> {
-                // La phrase est complète : Muse prépare sa réponse.
+                // The sentence is complete: Muse is preparing its answer.
                 if (event.final) avatar.state = AvatarView.State.WORKING
                 val line = lines.getOrPut("user-${event.item}") { Line(true, "") }
                 line.text = if (event.final) event.text.trim() else line.text + event.text
@@ -270,7 +289,7 @@ class CallPanel(
             is CallEvent.Ignored -> {
                 avatar.state = AvatarView.State.IDLE
                 lines["user-${event.item}"]?.ignored = true
-                status.text = "Phrase non prise comme adressée à $name"
+                status.text = tr("Not taken as addressed to $name", "Phrase non prise comme adressée à $name")
                 render()
             }
         }
@@ -283,22 +302,25 @@ class CallPanel(
 
     private fun listening() {
         avatar.state = AvatarView.State.IDLE
-        status.text = "À vous"
+        status.text = tr("Your turn", "À vous")
         show(interrupt = false, inCall = true)
     }
 
     private fun ended(outcome: MuseCall.Outcome) {
         val result = (outcome as? MuseCall.Outcome.Finished)?.result
         val end = (result as? CallResult.Ended)?.end
-        // Raccroché ou réveil sans demande : rien à lire.
+        // Hung up, or woken without a request: nothing to read.
         if (end == CallEnd.HUNG_UP || end == CallEnd.NOTHING_ASKED) return close()
         if (videoCall && end == null) {
-            // La vidéo n'a pas pu s'établir : le même appel continue à la voix. Ce qui a été dit
-            // après « Hey Muse » est alors perdu.
+            // Video could not be set up: the same call carries on by voice. What was said after "Hey Muse" is
+            // then lost.
             val repeat = wakeCall
             showVideo(false)
             open(video = false)
-            status.text = "Vidéo indisponible, appel vocal…" + if (repeat) " Redites votre question." else ""
+            status.text = tr(
+                "Video unavailable, voice call…",
+                "Vidéo indisponible, appel vocal…",
+            ) + if (repeat) tr(" Say your question again.", " Redites votre question.") else ""
             return
         }
         stopped(describe(outcome), if (end != null) AFTER_END_MS else AFTER_FAILURE_MS)
@@ -318,23 +340,38 @@ class CallPanel(
     }
 
     private fun describe(outcome: MuseCall.Outcome): String = when (outcome) {
-        MuseCall.Outcome.NoAudio -> "Le micro ou le haut-parleur est indisponible."
+        MuseCall.Outcome.NoAudio -> tr(
+            "The microphone or speaker is unavailable.",
+            "Le micro ou le haut-parleur est indisponible.",
+        )
         is MuseCall.Outcome.Unreachable ->
-            if (outcome.status == null) "Connexion vocale impossible." else "Connexion vocale refusée (HTTP ${outcome.status})."
+            if (outcome.status == null) tr("Voice connection failed.", "Connexion vocale impossible.") else tr(
+                "Voice connection refused (HTTP ${outcome.status}).",
+                "Connexion vocale refusée (HTTP ${outcome.status}).",
+            )
         is MuseCall.Outcome.Finished -> when (val result = outcome.result) {
             is CallResult.Ended -> when (result.end) {
-                CallEnd.HUNG_UP -> "Appel terminé."
-                CallEnd.REMOTE_END, CallEnd.REMOTE_STOP -> "$name a raccroché."
-                CallEnd.IDLE -> "Appel terminé après 30 secondes sans échange."
-                CallEnd.TOO_LONG -> "Appel terminé : 5 minutes au maximum."
-                CallEnd.GOODBYE -> "Au revoir."
-                CallEnd.NOTHING_ASKED -> "Aucune demande entendue : appel terminé."
+                CallEnd.HUNG_UP -> tr("Call ended.", "Appel terminé.")
+                CallEnd.REMOTE_END, CallEnd.REMOTE_STOP -> tr("$name hung up.", "$name a raccroché.")
+                CallEnd.IDLE -> tr(
+                    "Call ended after 30 seconds of silence.",
+                    "Appel terminé après 30 secondes sans échange.",
+                )
+                CallEnd.TOO_LONG -> tr("Call ended: 5 minutes at most.", "Appel terminé : 5 minutes au maximum.")
+                CallEnd.GOODBYE -> tr("Goodbye.", "Au revoir.")
+                CallEnd.NOTHING_ASKED -> tr(
+                    "No request heard: call ended.",
+                    "Aucune demande entendue : appel terminé.",
+                )
             }
             is CallResult.Failed -> when (result.failure) {
-                CallFailure.REFUSED -> "Le serveur refuse l'appel depuis ce gadget (HTTP ${result.status})."
-                CallFailure.NOT_READY -> "L'appel n'a pas démarré à temps."
-                CallFailure.PROTOCOL -> "Réponse inattendue du serveur."
-                CallFailure.CONNECTION -> "Connexion perdue."
+                CallFailure.REFUSED -> tr(
+                    "The server refuses calls from this gadget (HTTP ${result.status}).",
+                    "Le serveur refuse l'appel depuis ce gadget (HTTP ${result.status}).",
+                )
+                CallFailure.NOT_READY -> tr("The call did not start in time.", "L'appel n'a pas démarré à temps.")
+                CallFailure.PROTOCOL -> tr("Unexpected answer from the server.", "Réponse inattendue du serveur.")
+                CallFailure.CONNECTION -> tr("Connection lost.", "Connexion perdue.")
             }
         }
     }

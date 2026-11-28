@@ -7,7 +7,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Portage de linux/tests/test_ble_framing.py. */
+/** Port of linux/tests/test_ble_framing.py. */
 class BleFramingTest {
     private fun bytes(c: Char, n: Int) = ByteArray(n) { c.code.toByte() }
 

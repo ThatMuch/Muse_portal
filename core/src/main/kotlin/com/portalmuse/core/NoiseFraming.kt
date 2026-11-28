@@ -1,11 +1,11 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/noise/_proto.py, framing.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/noise/_proto.py, framing.py
 package com.portalmuse.core
 
 import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
 
-/** Sous-ensemble de protobuf utilisé par les enveloppes Muse. */
+/** The subset of protobuf used by Muse envelopes. */
 internal class ProtoWriter {
     private val out = ByteArrayOutputStream()
 
@@ -40,31 +40,31 @@ internal class ProtoWriter {
     }
 }
 
-/** Un champ lu : [number] vaut `null` pour un champ entier, [data] pour un champ délimité. */
+/** A field that was read: [number] is `null` for an integer field, [data] for a length-delimited one. */
 internal class ProtoField(val id: Int, val number: Long?, val data: ByteArray?) {
-    fun asLong(): Long = number ?: throw NoiseError("protobuf : champ $id de mauvais type")
-    fun asBytes(): ByteArray = data ?: throw NoiseError("protobuf : champ $id de mauvais type")
+    fun asLong(): Long = number ?: throw NoiseError("protobuf: field $id of the wrong type")
+    fun asBytes(): ByteArray = data ?: throw NoiseError("protobuf: field $id of the wrong type")
     fun asString(): String = String(asBytes())
 }
 
 internal object ProtoReader {
-    /** Les champs de largeur fixe, jamais utilisés ici, sont sautés. */
+    /** Fixed width fields, never used here, are skipped. */
     fun read(message: ByteArray): List<ProtoField> {
         var offset = 0
         fun varint(): Long {
             var value = 0L
             for (i in 0 until 10) {
-                if (offset >= message.size) throw NoiseError("protobuf : entier tronqué")
+                if (offset >= message.size) throw NoiseError("protobuf: truncated integer")
                 val byte = message[offset++].toInt() and 0xFF
                 if (i == 9 && byte and 0xFE != 0) break
                 value = value or ((byte and 0x7F).toLong() shl (7 * i))
                 if (byte and 0x80 == 0) return value
             }
-            throw NoiseError("protobuf : entier mal formé")
+            throw NoiseError("protobuf: malformed integer")
         }
 
         fun take(length: Long): ByteArray {
-            if (length < 0 || length > message.size - offset) throw NoiseError("protobuf : champ tronqué")
+            if (length < 0 || length > message.size - offset) throw NoiseError("protobuf: truncated field")
             return message.copyOfRange(offset, offset + length.toInt()).also { offset += length.toInt() }
         }
 
@@ -72,27 +72,27 @@ internal object ProtoReader {
         while (offset < message.size) {
             val key = varint()
             val id = key ushr 3
-            if (id == 0L || id > (1 shl 29) - 1) throw NoiseError("protobuf : numéro de champ invalide")
+            if (id == 0L || id > (1 shl 29) - 1) throw NoiseError("protobuf: invalid field number")
             when ((key and 7).toInt()) {
                 0 -> fields.add(ProtoField(id.toInt(), varint(), null))
                 2 -> fields.add(ProtoField(id.toInt(), null, take(varint())))
                 1 -> take(8)
                 5 -> take(4)
-                else -> throw NoiseError("protobuf : type de champ invalide")
+                else -> throw NoiseError("protobuf: invalid field type")
             }
         }
         return fields
     }
 }
 
-/** Découpage d'un message en trames de transport, chacune chiffrée séparément. */
+/** Splitting a message into transport frames, each encrypted separately. */
 object NoiseFraming {
     const val MAX_CHUNK_PAYLOAD = 65489
     const val MAX_TOTAL_CHUNKS = 256
 
     fun encode(data: ByteArray, chunkId: Long = SecureRandom().nextLong()): List<ByteArray> {
         val total = maxOf(1, (data.size + MAX_CHUNK_PAYLOAD - 1) / MAX_CHUNK_PAYLOAD)
-        require(total <= MAX_TOTAL_CHUNKS) { "message trop grand pour le transport" }
+        require(total <= MAX_TOTAL_CHUNKS) { "message too large for the transport" }
         return List(total) { index ->
             val start = index * MAX_CHUNK_PAYLOAD
             val payload = data.copyOfRange(start, minOf(start + MAX_CHUNK_PAYLOAD, data.size))
@@ -106,7 +106,7 @@ object NoiseFraming {
     }
 }
 
-/** Réassemble les trames. Toute incohérence le rend inutilisable. */
+/** Reassembles the frames. Any inconsistency makes it unusable. */
 class NoiseFrameDecoder(private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private class Assembly(val total: Int, val createdAt: Long) {
         val chunks = HashMap<Int, ByteArray>()
@@ -117,7 +117,7 @@ class NoiseFrameDecoder(private val clock: () -> Long = { System.nanoTime() / 1_
     private var poisoned = false
 
     fun decode(frame: ByteArray): ByteArray? {
-        if (poisoned) throw NoiseError("décodeur de trames inutilisable")
+        if (poisoned) throw NoiseError("frame decoder unusable")
         try {
             var chunkId = 0L
             var index = 0L
@@ -131,19 +131,19 @@ class NoiseFrameDecoder(private val clock: () -> Long = { System.nanoTime() / 1_
                     4 -> payload = field.asBytes()
                 }
             }
-            if (total < 1 || total > NoiseFraming.MAX_TOTAL_CHUNKS) throw NoiseError("nombre de trames invalide")
-            if (index < 0 || index >= total) throw NoiseError("index de trame hors limites")
-            if (payload.size > NoiseFraming.MAX_CHUNK_PAYLOAD) throw NoiseError("trame trop grande")
+            if (total < 1 || total > NoiseFraming.MAX_TOTAL_CHUNKS) throw NoiseError("invalid frame count")
+            if (index < 0 || index >= total) throw NoiseError("frame index out of range")
+            if (payload.size > NoiseFraming.MAX_CHUNK_PAYLOAD) throw NoiseError("frame too large")
             val now = clock()
             pending.values.removeAll { now - it.createdAt > TTL_MILLIS }
             val assembly = pending[chunkId] ?: run {
-                if (pending.size >= MAX_PENDING) throw NoiseError("trop de messages en cours")
+                if (pending.size >= MAX_PENDING) throw NoiseError("too many messages in progress")
                 Assembly(total.toInt(), now).also { pending[chunkId] = it }
             }
-            if (assembly.total != total.toInt()) throw NoiseError("nombre de trames incohérent")
-            if (assembly.chunks.put(index.toInt(), payload) != null) throw NoiseError("trame en double")
+            if (assembly.total != total.toInt()) throw NoiseError("inconsistent frame count")
+            if (assembly.chunks.put(index.toInt(), payload) != null) throw NoiseError("duplicate frame")
             assembly.bytes += payload.size
-            if (assembly.bytes > MAX_ASSEMBLY_BYTES) throw NoiseError("message trop grand")
+            if (assembly.bytes > MAX_ASSEMBLY_BYTES) throw NoiseError("message too large")
             if (assembly.chunks.size < assembly.total) return null
             pending.remove(chunkId)
             val whole = ByteArrayOutputStream(assembly.bytes)

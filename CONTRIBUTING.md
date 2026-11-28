@@ -42,9 +42,8 @@ will not be merged.
 
 ## Good first contributions
 
-- **Translate the interface**: move the French strings to Android resources, with English as the
-  default and French as a translation.
-- **Translate the code comments** to English.
+- **Add a language**: texts live next to the code as `tr("English", "French")`. Moving them to
+  Android resources (English by default, French as a translation) would open the door to more.
 - Report how it runs on **other Portal models** or Android versions.
 - Make the layouts better in **portrait** orientation.
 - Try the **Bluetooth**, **camera** and **feed** features with a real Muse and report what happens.

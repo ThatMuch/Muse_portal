@@ -1,10 +1,10 @@
-/* Pont Java vers le détecteur « Hey Muse » (muse-gadget-sdk, Apache-2.0). */
+/* Java bridge to the "Hey Muse" detector (muse-gadget-sdk, Apache-2.0). */
 #include <jni.h>
 #include <stdint.h>
 
 #include "ww_runner.h"
 
-#define WW_MAX_FRAMES 1600 /* 100 ms à 16 kHz */
+#define WW_MAX_FRAMES 1600 /* 100 ms at 16 kHz */
 
 JNIEXPORT jlong JNICALL
 Java_com_portalmuse_gadget_WakeWordEngine_nativeCreate(JNIEnv *env, jobject self, jint sensitivity)
@@ -16,7 +16,7 @@ Java_com_portalmuse_gadget_WakeWordEngine_nativeCreate(JNIEnv *env, jobject self
     return (jlong)(intptr_t)ww_runner_create(&config);
 }
 
-/* Vrai si le mot d'activation vient d'être entendu. */
+/* True if the wake word has just been heard. */
 JNIEXPORT jboolean JNICALL
 Java_com_portalmuse_gadget_WakeWordEngine_nativeFeed(JNIEnv *env, jobject self, jlong handle,
                                                      jshortArray samples, jint count)

@@ -23,17 +23,17 @@ import kotlin.concurrent.thread
 
 private const val TAG = "PortalMuse"
 private const val MAX_WAITING = 30
-/** La taille annoncée au départ ; le flux donne ensuite la sienne. */
+/** The size announced at the start; the stream then gives its own. */
 private const val START_WIDTH = 448
 private const val START_HEIGHT = 768
 
 /**
- * La vidéo de Muse pendant un appel : décodage H.264 matériel dans une vue qui garde les
- * proportions. [push] reçoit des images complètes depuis n'importe quel fil.
+ * Muse's video during a call: hardware H.264 decoding into a view that keeps the proportions. [push] receives
+ * complete pictures from any thread.
  */
 class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceTextureListener {
     private val texture = TextureView(context)
-    /** L'image retouchée, posée par-dessus la vidéo brute. */
+    /** The retouched picture, laid over the raw video. */
     private val cleaned = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_XY }
     private val painter = Handler(HandlerThread("video-backdrop").apply { start() }.looper)
     private var frames: Array<Bitmap>? = null
@@ -46,7 +46,7 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
     @Volatile private var worker: Thread? = null
     @Volatile private var running = false
 
-    /** Appelé quand une image clé est nécessaire pour reprendre. */
+    /** Called when a key frame is needed to resume. */
     var onNeedKeyframe: () -> Unit = {}
 
     init {
@@ -59,7 +59,7 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
     fun start() {
         stop()
         running = true
-        // Rien à l'écran avant la première image retouchée : pas d'éclair blanc.
+        // Nothing on screen before the first retouched picture: no white flash.
         texture.alpha = 0.001f
         cleaned.setImageDrawable(null)
         surface?.let(::decode)
@@ -75,7 +75,7 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
     fun push(unit: ByteArray) {
         if (!running) return
         if (waiting.size >= MAX_WAITING) {
-            // Le décodeur n'a pas suivi : repartir d'une image clé.
+            // The decoder fell behind: start again from a key frame.
             waiting.clear()
             onNeedKeyframe()
         }
@@ -93,10 +93,10 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
                 onNeedKeyframe()
                 render(codec)
             } catch (e: RuntimeException) {
-                // La vidéo ne termine jamais l'appel : le son continue.
-                if (running) Log.w(TAG, "vidéo : décodeur en échec (${e.javaClass.simpleName})")
+                // Video never ends the call: sound carries on.
+                if (running) Log.w(TAG, "video: decoder failed (${e.javaClass.simpleName})")
             } catch (e: java.io.IOException) {
-                Log.w(TAG, "vidéo : aucun décodeur")
+                Log.w(TAG, "video: no decoder")
             } finally {
                 codec?.let {
                     runCatching { it.stop() }
@@ -134,7 +134,7 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
                 }
                 if (ready < 0) break
                 codec.releaseOutputBuffer(ready, true)
-                if (frames++ == 0) Log.i(TAG, "vidéo : première image affichée")
+                if (frames++ == 0) Log.i(TAG, "video: first picture shown")
             }
         }
     }
@@ -145,14 +145,14 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
         val width = if (left != null) value("crop-right")!! - left + 1 else value(MediaFormat.KEY_WIDTH) ?: return
         val top = value("crop-top")
         val height = if (top != null) value("crop-bottom")!! - top + 1 else value(MediaFormat.KEY_HEIGHT) ?: return
-        Log.i(TAG, "vidéo : $width x $height")
+        Log.i(TAG, "video: $width x $height")
         post { fit(width, height) }
     }
 
     private fun fit(videoWidth: Int, videoHeight: Int) {
         if (width == 0 || height == 0 || videoWidth <= 0 || videoHeight <= 0) return
         val scale = minOf(width.toFloat() / videoWidth, height.toFloat() / videoHeight)
-        // En paysage Muse se tient à droite et le texte à gauche ; en portrait il est au centre.
+        // In landscape Muse stands on the right and the text on the left; in portrait it is centered.
         val place = if (width > height) Gravity.END or Gravity.CENTER_VERTICAL else Gravity.CENTER
         val fitted = LayoutParams((videoWidth * scale).toInt(), (videoHeight * scale).toInt(), place)
         if (width > height) fitted.marginEnd = Ui.dp(context, 96)
@@ -167,7 +167,7 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        // Avant la première image : les proportions habituelles des appels de Muse.
+        // Before the first picture: the usual proportions of Muse calls.
         if (changed && visibility == View.VISIBLE) post { fit(START_WIDTH, START_HEIGHT) }
     }
 
@@ -189,8 +189,8 @@ class VideoScreen(context: Context) : FrameLayout(context), TextureView.SurfaceT
     override fun onSurfaceTextureSizeChanged(changed: SurfaceTexture, width: Int, height: Int) = Unit
 
     /**
-     * Chaque image décodée est relue, son fond clair noirci hors du fil principal, puis affichée.
-     * Si le calcul n'a pas fini, l'image est sautée.
+     * Each decoded picture is read back, its light background blackened off the main thread, then shown. If the
+     * computation is not finished, the picture is skipped.
      */
     override fun onSurfaceTextureUpdated(updated: SurfaceTexture) {
         val buffers = frames

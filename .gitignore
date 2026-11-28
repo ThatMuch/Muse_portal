@@ -5,9 +5,9 @@ local.properties
 *.apk
 *.keystore
 *.jks
-# dépendances téléchargées par tools/preparer-reveil.sh
+# dependencies downloaded by tools/prepare-wakeword.sh
 third_party/
 .cxx/
-# jamais de secrets
+# never any secret
 .env
 *.token

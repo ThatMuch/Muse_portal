@@ -16,7 +16,7 @@ import android.widget.TextClock
 private const val PHOTO_MS = 20_000L
 private const val FADE_MS = 1_200L
 
-/** Le cadre photo : un diaporama et l'heure, tant que personne ne touche l'écran. */
+/** The photo frame: a slideshow and the time, as long as nobody touches the screen. */
 class PhotoFrame(private val activity: Activity, root: FrameLayout) {
     private val main = Handler(Looper.getMainLooper())
     private var photos: Frame? = null
@@ -47,7 +47,7 @@ class PhotoFrame(private val activity: Activity, root: FrameLayout) {
 
     val isOpen get() = panel.visibility == View.VISIBLE
 
-    /** Sans effet si ces mêmes photos défilent déjà. */
+    /** No effect if those same photos are already playing. */
     fun open(frame: Frame) {
         val same = photos?.photos?.map { it.first to it.first.lastModified() } ==
             frame.photos.map { it.first to it.first.lastModified() }
@@ -85,7 +85,7 @@ class PhotoFrame(private val activity: Activity, root: FrameLayout) {
 
     private fun shadow(view: android.widget.TextView) {
         view.setShadowLayer(12f, 0f, 2f, Color.BLACK)
-        // Sans marge intérieure, l'ombre est coupée net et dessine un rectangle.
+        // Without inner padding, the shadow is cut off sharply and draws a rectangle.
         val room = Ui.dp(activity, 16)
         view.setPadding(room, room, room, room)
     }

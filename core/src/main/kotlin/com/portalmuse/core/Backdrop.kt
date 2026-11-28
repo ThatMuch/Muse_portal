@@ -1,23 +1,23 @@
 package com.portalmuse.core
 
-/** Le clair d'un fond de studio : lumineux, peu coloré, et plutôt froid que chaud. */
+/** What counts as the light of a studio background: bright, little colored, and cool rather than warm. */
 private const val SEED_MIN = 160
 private const val GROW_MIN = 125
 private const val MAX_SPREAD = 40
-/** Les poils blancs tirent sur le jaune (rouge au-dessus du bleu), pas le fond. */
+/** White fur leans toward yellow (red above blue), the background does not. */
 private const val MAX_WARMTH = 14
-/** L'écart toléré d'un point à son voisin : un fond est lisse, un contour ne l'est pas. */
+/** The tolerated gap between a pixel and its neighbor: a background is smooth, an outline is not. */
 private const val MAX_STEP = 14
 
 /**
- * Remplace par du noir le fond clair d'une image de Muse : une propagation depuis les bords, qui
- * s'arrête aux contours du personnage. Un blanc entouré par le personnage reste donc blanc. Le
- * calcul se fait à demi-résolution ; les tampons sont réutilisés d'une image à l'autre.
+ * Replaces the light background of a Muse picture with black: a flood fill from the edges that stops at the
+ * character's outline. A white area surrounded by the character therefore stays white. Computed at half
+ * resolution; buffers are reused from one picture to the next.
  */
 class Backdrop(private val width: Int, private val height: Int) {
     private val halfWidth = (width + 1) / 2
     private val halfHeight = (height + 1) / 2
-    /** 0 : à garder ; 4 : fond ; entre les deux : liseré. */
+    /** 0: keep; 4: background; in between: edge. */
     private val mask = IntArray(halfWidth * halfHeight)
     private val queue = IntArray(halfWidth * halfHeight)
 
@@ -38,8 +38,8 @@ class Backdrop(private val width: Int, private val height: Int) {
             Math.abs((a and 0xFF) - (b and 0xFF)) <= MAX_STEP
 
     /**
-     * Noircit le fond de [pixels] (ARGB, rangée par rangée) sur place. Faux, sans rien toucher, si
-     * l'image n'a pas de fond clair.
+     * Blackens the background of [pixels] (ARGB, row by row) in place. False, touching nothing, if the picture
+     * has no light background.
      */
     fun blacken(pixels: IntArray): Boolean {
         require(pixels.size >= width * height)
@@ -53,7 +53,7 @@ class Backdrop(private val width: Int, private val height: Int) {
                 queue[tail++] = index
             }
         }
-        // Le haut et les côtés ; le bas peut être occupé par le personnage.
+        // The top and sides; the bottom may be occupied by the character.
         for (x in 0 until halfWidth) seed(x)
         for (y in 1 until halfHeight) {
             seed(y * halfWidth)
@@ -83,7 +83,7 @@ class Backdrop(private val width: Int, private val height: Int) {
         return true
     }
 
-    /** Les points clairs qui touchent le fond sont assombris : pas de liseré blanc. */
+    /** Light pixels touching the background are darkened: no white fringe. */
     private fun soften(pixels: IntArray) {
         for (index in mask.indices) {
             if (mask[index] != 0) continue
@@ -105,7 +105,7 @@ class Backdrop(private val width: Int, private val height: Int) {
             for (x in 0 until width) {
                 val column = x / 2
                 val right = if (x % 2 == 1 && column < halfWidth - 1) column + 1 else column
-                // La moyenne des voisins lisse le contour entre deux points calculés.
+                // The average of the neighbors smooths the outline between two computed pixels.
                 val covered = mask[row + column] + mask[row + right] + mask[below + column] + mask[below + right]
                 if (covered == 0) continue
                 val index = y * width + x

@@ -1,5 +1,5 @@
-# Détecteur « Hey Muse » pour Android : les mêmes sources et réglages que
-# muse-gadget-sdk/linux/wakeword/build.sh, compilés avec le NDK.
+# "Hey Muse" detector for Android: the same sources and settings as
+# muse-gadget-sdk/linux/wakeword/build.sh, built with the NDK.
 cmake_minimum_required(VERSION 3.22.1)
 project(muse_wakeword C CXX ASM)
 
@@ -9,10 +9,10 @@ set(ET "${DEPS}/executorch")
 set(NN "${DEPS}/esp-nn")
 set(MF "${DEPS}/esp-micro-speech-features")
 if(NOT EXISTS "${ET}/et_generated.cmake" OR NOT EXISTS "${NN}/src" OR NOT EXISTS "${MF}/src")
-  message(FATAL_ERROR "Dépendances absentes : lancer ./tools/preparer-reveil.sh")
+  message(FATAL_ERROR "Dépendances absentes : lancer ./tools/prepare-wakeword.sh")
 endif()
 
-# La liste des sources d'ExecuTorch est lue comme du texte, sans exécuter leur fichier CMake.
+# The list of ExecuTorch sources is read as text, without running their CMake file.
 file(READ "${ET}/et_generated.cmake" generated)
 function(et_sources name out)
   string(REGEX MATCH "set\\(${name}[^)]*\\)" block "${generated}")
@@ -44,7 +44,7 @@ target_include_directories(ww_executorch PRIVATE "${WW}/host" ${et_includes} ${n
 target_compile_definitions(ww_executorch PRIVATE ${et_defines})
 target_compile_options(ww_executorch PRIVATE ${common} ${cxxonly})
 
-# Les noyaux en C portable d'esp-nn.
+# The portable C kernels of esp-nn.
 file(GLOB nn_sources "${NN}/src/*/*_ansi.c")
 list(APPEND nn_sources
   "${NN}/src/convolution/esp_nn_conv_opt.c" "${NN}/src/convolution/esp_nn_depthwise_conv_opt.c"
@@ -68,7 +68,7 @@ target_include_directories(ww_runner PRIVATE "${WW}" "${WW}/include" ${et_includ
 target_compile_definitions(ww_runner PRIVATE ${et_defines})
 target_compile_options(ww_runner PRIVATE ${common} ${cxxonly})
 
-# Le modèle, intégré à la bibliothèque et aligné sur 16 octets comme dans le firmware.
+# The model, embedded in the library and aligned on 16 bytes as in the firmware.
 set(HEY_MUSE_PTE_PATH "${WW}/models/hey_muse.pte")
 file(SIZE "${HEY_MUSE_PTE_PATH}" HEY_MUSE_PTE_LEN)
 configure_file("${WW}/hey_muse_pte.S.in" "${CMAKE_CURRENT_BINARY_DIR}/hey_muse_pte.S" @ONLY)

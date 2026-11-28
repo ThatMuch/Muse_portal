@@ -3,7 +3,7 @@ package com.portalmuse.gadget
 import android.os.Handler
 import android.os.Looper
 
-/** État de l'appairage, partagé entre le service et l'écran. `null` : appairage fermé. */
+/** Pairing state, shared between the service and the screen. `null`: pairing closed. */
 object PairingStatus {
     private val main = Handler(Looper.getMainLooper())
 
@@ -23,7 +23,7 @@ object PairingStatus {
         main.post {
             main.removeCallbacks(dismiss)
             set(isOpen, text)
-            // Un message de fermeture ne reste pas à l'écran.
+            // A closing message does not stay on screen.
             if (!isOpen && text != null) main.postDelayed(dismiss, 15_000)
         }
     }

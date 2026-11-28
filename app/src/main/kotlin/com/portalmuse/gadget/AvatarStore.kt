@@ -20,21 +20,21 @@ private const val MAX_IMAGE_BYTES = 6 * 1024 * 1024
 private const val MAX_VIDEO_BYTES = 30 * 1024 * 1024
 private const val IMAGE = "image"
 
-/** Les états du firmware qui servent ici : au repos et au travail. */
+/** The firmware states used here: at rest and at work. */
 private val CLIPS = listOf("idle", "working")
 
-/** Les fichiers de l'avatar disponibles sur le Portal. */
+/** The avatar files available on the Portal. */
 class AvatarFiles(val image: File, val idle: File?, val working: File?)
 
 /**
- * L'avatar du Muse, gardé dans le stockage privé de l'app et rafraîchi quand sa version change.
- * En cas d'échec, la dernière version complète reste affichée.
+ * The Muse's avatar, kept in the app's private storage and refreshed when its version changes. On failure, the
+ * last complete version stays on screen.
  */
 object AvatarStore {
     private val main = Handler(Looper.getMainLooper())
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
     private val syncing = AtomicBoolean()
-    /** Change à chaque effacement : un téléchargement commencé avant ne doit rien publier. */
+    /** Changes on every clear: a download started earlier must not publish anything. */
     private val generation = AtomicInteger()
 
     fun observe(listener: () -> Unit) {
@@ -56,7 +56,7 @@ object AvatarStore {
         return AvatarFiles(image, clip("idle"), clip("working"))
     }
 
-    /** L'appairage disparaît : son avatar aussi. */
+    /** The pairing goes away: so does its avatar. */
     @Synchronized
     fun clear(context: Context) {
         generation.incrementAndGet()
@@ -64,33 +64,33 @@ object AvatarStore {
         notifyChanged()
     }
 
-    /** Bloquant : à appeler hors du fil principal. */
+    /** Blocking: call it off the main thread. */
     fun sync(context: Context, streams: MuseStreams) {
         if (!syncing.compareAndSet(false, true)) return
         try {
             update(context.applicationContext, AvatarClient(streams))
         } catch (e: RuntimeException) {
-            Log.w(TAG, "avatar : synchronisation en échec (${e.javaClass.simpleName})")
+            Log.w(TAG, "avatar: sync failed (${e.javaClass.simpleName})")
         } finally {
             syncing.set(false)
         }
     }
 
     private fun update(context: Context, client: AvatarClient) {
-        val log: (String) -> Unit = { Log.i(TAG, "avatar : $it") }
+        val log: (String) -> Unit = { Log.i(TAG, "avatar: $it") }
         val (identity, shape) = client.identity(log) ?: return
-        // Les écrans de l'app sont sombres.
+        // The app's screens are dark.
         val avatar = (identity as? AvatarIdentity.Present)?.avatar?.forDarkScreen()
         if (avatar == null) {
-            // Une image absente peut être en cours de création : on garde l'ancienne.
-            log("aucun avatar utilisable ($shape)")
+            // A missing picture may still be being generated: keep the old one.
+            log("no usable avatar ($shape)")
             return
         }
         val directory = directory(context)
         val version = describe(avatar)
         val meta = File(directory, "meta.json")
         if (meta.exists() && meta.readText() == version && File(directory, IMAGE).exists()) return
-        log("nouvelle version, $shape")
+        log("new version, $shape")
         val started = generation.get()
         val work = File(context.cacheDir, "avatar-download").apply {
             deleteRecursively()
@@ -100,25 +100,25 @@ object AvatarStore {
             val image = fetch(client, avatar.imagePath, File(work, IMAGE), MAX_IMAGE_BYTES, log) ?: return
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(image.path, bounds)
-            if (bounds.outWidth <= 0) return log("image illisible")
-            log("image ${bounds.outWidth} x ${bounds.outHeight}, ${image.length() / 1024} Ko")
+            if (bounds.outWidth <= 0) return log("unreadable picture")
+            log("picture ${bounds.outWidth} x ${bounds.outHeight}, ${image.length() / 1024} KB")
             val clips = CLIPS.mapNotNull { name ->
                 val path = avatar.videos[name] ?: return@mapNotNull null
                 val file = fetch(client, path, File(work, "$name.mp4"), MAX_VIDEO_BYTES, log)
-                if (file == null || !isMp4(file)) null.also { log("vidéo $name non récupérée") }
-                else file.also { log("vidéo $name, ${it.length() / 1024} Ko") }
+                if (file == null || !isMp4(file)) null.also { log("video $name not retrieved") }
+                else file.also { log("video $name, ${it.length() / 1024} KB") }
             }
             synchronized(this) {
                 if (generation.get() != started) return
                 directory.deleteRecursively()
                 directory.mkdirs()
                 for (file in listOf(image) + clips) file.renameTo(File(directory, file.name))
-                // La version n'est notée que si tout ce qui était annoncé est là : sinon on réessaiera.
+                // The version is only recorded once everything announced is there: otherwise we try again.
                 val complete = clips.size == CLIPS.count { it in avatar.videos }
                 File(directory, "meta.json").writeText(if (complete) version else "incomplet")
             }
             notifyChanged()
-            log("prêt")
+            log("ready")
         } finally {
             work.deleteRecursively()
         }
@@ -135,7 +135,7 @@ object AvatarStore {
         .put("videos", CLIPS.joinToString("|") { avatar.videos[it].orEmpty() })
         .toString()
 
-    /** Un fichier MP4 commence par une boîte « ftyp ». */
+    /** An MP4 file starts with an "ftyp" box. */
     private fun isMp4(file: File): Boolean {
         val head = ByteArray(12)
         val read = file.inputStream().use { it.read(head) }

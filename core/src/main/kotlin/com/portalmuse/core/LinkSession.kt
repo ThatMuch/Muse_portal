@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Sources : linux/src/musegadget/link_client.py, noise/transport.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Sources:
+// linux/src/musegadget/link_client.py, noise/transport.py
 package com.portalmuse.core
 
 import org.json.JSONObject
@@ -18,26 +18,26 @@ private val NO_DATA = ByteArray(0)
 private const val MAX_INLINE_REQUEST_BYTES = 64 * 1024
 private const val REQUEST_CHUNK_BYTES = 16 * 1024
 
-/** Messages binaires d'une WebSocket. */
+/** Binary messages of a WebSocket. */
 interface FrameSocket {
     fun send(data: ByteArray): Boolean
 
-    /** `null` : connexion fermée. [timeoutMillis] à 0 attend sans limite. */
+    /** `null`: connection closed. [timeoutMillis] at 0 waits without limit. */
     @Throws(IOException::class)
     fun receive(timeoutMillis: Long = 0): ByteArray?
 
-    /** Ferme aussitôt et débloque [receive]. */
+    /** Closes at once and unblocks [receive]. */
     fun close()
 }
 
 enum class Outcome {
-    /** Connexion terminée : se reconnecter normalement. */
+    /** Connection over: reconnect normally. */
     CLOSED,
-    /** Jeton de VM refusé : redemander la liste des VM. */
+    /** VM token refused: ask for the VM list again. */
     AUTH_REJECTED,
-    /** Authentifié mais pas autorisé pour l'instant. */
+    /** Authenticated but not allowed for now. */
     FORBIDDEN,
-    /** Muse a retiré cet appareil. */
+    /** Muse removed this device. */
     UNPAIRED,
     STOPPED,
 }
@@ -48,9 +48,8 @@ interface ActiveSession {
 }
 
 /**
- * Une session de contrôle avec une VM Muse : handshake Noise XX, flux `POST /api/gadget/control`
- * sur le service Gadget, `link.register`, puis réponses aux `link.invoke`.
- * Les journaux ne portent jamais de paramètres, de résultats ni de jetons.
+ * A control session with a Muse VM: Noise XX handshake, `POST /api/gadget/control` stream on the Gadget
+ * service, `link.register`, then answers to `link.invoke`. The logs never carry parameters, results or tokens.
  */
 class LinkSession(
     private val socket: FrameSocket,
@@ -60,9 +59,8 @@ class LinkSession(
     private val onRegistered: () -> Unit = {},
     private val log: (String) -> Unit = {},
     /**
-     * Faux pour une connexion réservée à la voix : ni flux de contrôle ni `link.register`, pour ne
-     * pas remplacer la session permanente du même appareil. [onRegistered] signale alors qu'elle
-     * est prête.
+     * False for a connection reserved for voice: no control stream and no `link.register`, so as not to replace
+     * the permanent session of the same device. [onRegistered] then signals that it is ready.
      */
     private val registerDevice: Boolean = true,
 ) : ActiveSession, MuseStreams {
@@ -79,7 +77,7 @@ class LinkSession(
     @Volatile private var registered = false
     @Volatile private var ended = false
 
-    /** Vrai entre l'enregistrement et la fin de la session. */
+    /** True between registration and the end of the session. */
     val isOpen: Boolean get() = registered && !ended && !stopped
 
     override fun run(): Outcome = try {
@@ -93,15 +91,15 @@ class LinkSession(
         val outcome = readLoop(receiveCipher)
         if (stopped) Outcome.STOPPED else outcome
     } catch (e: IOException) {
-        log("session interrompue : ${e.javaClass.simpleName}")
+        log("session interrupted: ${e.javaClass.simpleName}")
         if (stopped) Outcome.STOPPED else Outcome.CLOSED
     } catch (e: NoiseError) {
-        log("session interrompue : ${e.message}")
+        log("session interrupted: ${e.message}")
         if (stopped) Outcome.STOPPED else Outcome.CLOSED
     } finally {
         ended = true
         socket.close()
-        streams.values.forEach { it.fail("session terminée") }
+        streams.values.forEach { it.fail("session over") }
         streams.clear()
     }
 
@@ -109,17 +107,17 @@ class LinkSession(
         service: ServiceType, verb: String, path: String, headers: List<Pair<String, String>>, body: ByteArray,
     ): MuseStream = open(service, verb, path, headers, body, endBody = true)
 
-    /** Avec [endBody] faux, l'envoi reste ouvert : voir [sendBody]. */
+    /** With [endBody] false, sending stays open: see [sendBody]. */
     fun open(
         service: ServiceType, verb: String, path: String, headers: List<Pair<String, String>>, body: ByteArray,
         endBody: Boolean, maxBufferedBytes: Int = MuseStream.DEFAULT_BUFFER_BYTES,
     ): MuseStream {
         val inParts = body.size > MAX_INLINE_REQUEST_BYTES
-        require(endBody || !inParts) { "corps initial trop grand pour un flux ouvert" }
+        require(endBody || !inParts) { "initial body too large for an open stream" }
         try {
-            // Les identifiants de flux partent dans l'ordre où ils sont attribués.
+            // Stream identifiers go out in the order they are assigned.
             val stream = synchronized(sendLock) {
-                if (!isOpen) throw IOException("session Muse non connectée")
+                if (!isOpen) throw IOException("Muse session not connected")
                 val created = MuseStream(nextStreamId++, maxBufferedBytes) { abandon(it, service) }
                 streams[created.id] = created
                 val inline = if (inParts) NO_DATA else body
@@ -134,26 +132,26 @@ class LinkSession(
                     sendFrame(ServiceFrame.BodyChunk(stream.id, chunk, endBody = end == body.size), service)
                 }
             }
-            // La session a pu finir pendant l'envoi.
-            if (ended) stream.fail("session terminée")
+            // The session may have ended during the send.
+            if (ended) stream.fail("session over")
             return stream
         } catch (e: NoiseError) {
-            throw IOException("envoi impossible", e)
+            throw IOException("cannot send", e)
         }
     }
 
-    /** Envoie un morceau d'un flux ouvert, sauf si [admissible] le refuse au dernier moment. */
+    /** Sends a chunk of an open stream, unless [admissible] rejects it at the last moment. */
     @Throws(IOException::class)
     fun sendBody(
         stream: MuseStream, service: ServiceType, data: ByteArray, endBody: Boolean,
         admissible: () -> Boolean = { true },
     ): Boolean = synchronized(sendLock) {
-        if (!isOpen) throw IOException("session Muse non connectée")
+        if (!isOpen) throw IOException("Muse session not connected")
         if (!admissible()) return false
         try {
             sendFrame(ServiceFrame.BodyChunk(stream.id, data, endBody), service)
         } catch (e: NoiseError) {
-            throw IOException("envoi impossible", e)
+            throw IOException("cannot send", e)
         }
         true
     }
@@ -163,9 +161,9 @@ class LinkSession(
         try {
             sendFrame(ServiceFrame.Reset(stream.id, RESET_CANCELLED, "request ended"), service)
         } catch (e: IOException) {
-            log("annulation de requête non envoyée")
+            log("request cancellation not sent")
         } catch (e: NoiseError) {
-            log("annulation de requête non envoyée")
+            log("request cancellation not sent")
         }
     }
 
@@ -177,13 +175,13 @@ class LinkSession(
     private fun handshake(): CipherState {
         val initiator = NoiseXXInitiator()
         transmit(initiator.writeMessage1())
-        val message2 = socket.receive(HANDSHAKE_TIMEOUT_MS) ?: throw IOException("fermée pendant le handshake")
+        val message2 = socket.receive(HANDSHAKE_TIMEOUT_MS) ?: throw IOException("closed during the handshake")
         initiator.readMessage2(message2)
-        // Le jeton a déjà authentifié l'appareil à l'ouverture ; le message 3 est vide.
+        // The token already authenticated the device when opening; message 3 is empty.
         transmit(initiator.writeMessage3())
         val (send, receive) = initiator.split()
         sendCipher = send
-        log("session Noise établie")
+        log("Noise session established")
         return receive
     }
 
@@ -191,29 +189,28 @@ class LinkSession(
         streamId = 1
         sendFrame(ServiceFrame.Request(streamId, "POST", CONTROL_PATH))
         sendMessage(device.registerMessage(registerId, commands.specs()))
-        log("link.register envoyé pour ${device.nodeId}")
+        log("link.register sent for ${device.nodeId}")
     }
 
     private fun transmit(data: ByteArray) {
-        if (!socket.send(data)) throw IOException("envoi impossible")
+        if (!socket.send(data)) throw IOException("cannot send")
     }
 
-    /** Chiffrer avance le nonce : le verrou couvre le chiffrement et l'envoi. */
+    /** Encrypting advances the nonce: the lock covers encryption and sending. */
     private fun sendFrame(frame: ServiceFrame, service: ServiceType = ServiceType.GADGET) = synchronized(sendLock) {
         try {
             for (part in NoiseFraming.encode(Envelope.encodeRequest(service, frame))) {
                 transmit(sendCipher.encryptWithAd(NO_DATA, part))
             }
         } catch (e: Exception) {
-            // Livraison incertaine : ce chiffrement ne doit plus servir.
+            // Delivery uncertain: this cipher must not be used again.
             socket.close()
             throw e
         }
     }
 
     /**
-     * Un message sans réponse sur le flux de contrôle, une fois l'appareil enregistré. Faux s'il
-     * n'est pas parti.
+     * A message without answer on the control stream, once the device is registered. False if it was not sent.
      */
     fun report(message: JSONObject): Boolean {
         if (!isOpen || !registerDevice) return false
@@ -234,7 +231,7 @@ class LinkSession(
         val decoder = NoiseFrameDecoder()
         while (true) {
             val raw = socket.receive() ?: run {
-                log("connexion de contrôle fermée")
+                log("control connection closed")
                 return Outcome.CLOSED
             }
             val whole = decoder.decode(receiveCipher.decryptWithAd(NO_DATA, raw)) ?: continue
@@ -245,22 +242,22 @@ class LinkSession(
             }
             val (data, ended) = when (frame) {
                 is ServiceFrame.Reset -> {
-                    log("flux de contrôle réinitialisé (code ${frame.code})")
+                    log("control stream reset (code ${frame.code})")
                     return Outcome.CLOSED
                 }
                 is ServiceFrame.Response -> {
                     if (frame.status !in 200..299) {
-                        log("$CONTROL_PATH refusé : HTTP ${frame.status}")
+                        log("$CONTROL_PATH refused: HTTP ${frame.status}")
                         return if (frame.status == 403) Outcome.FORBIDDEN else Outcome.CLOSED
                     }
                     frame.body to frame.endBody
                 }
                 is ServiceFrame.BodyChunk -> frame.data to frame.endBody
-                is ServiceFrame.Request -> throw NoiseError("requête inattendue venant du serveur")
+                is ServiceFrame.Request -> throw NoiseError("unexpected request from the server")
             }
             for (message in messages.feed(data)) handle(message)?.let { return it }
             if (ended) {
-                log("flux de contrôle terminé par la VM")
+                log("control stream ended by the VM")
                 return Outcome.CLOSED
             }
         }
@@ -269,19 +266,19 @@ class LinkSession(
     private fun handle(message: JSONObject): Outcome? {
         if (message.opt("id") == registerId && !message.has("method")) {
             if (isSet(message.opt("error")) || message.opt("ok") == false) {
-                log("link.register refusé")
+                log("link.register refused")
                 return Outcome.FORBIDDEN
             }
             if (!registered) {
                 registered = true
-                log("enregistré auprès de Muse")
+                log("registered with Muse")
                 onRegistered()
             }
             return null
         }
         when (message.opt("event")) {
             "link.unpaired", "node.unpaired" -> {
-                log("Muse a retiré cet appareil")
+                log("Muse removed this device")
                 return Outcome.UNPAIRED
             }
         }
@@ -305,10 +302,10 @@ class LinkSession(
                 try {
                     val shown = command.orEmpty().take(40).map { if (it.isISOControl()) '?' else it }.joinToString("")
                     val result = commands.run(command.orEmpty(), params)
-                    log("commande $shown : ${if (result.optBoolean("ok")) "ok" else "refusée"}")
+                    log("command $shown: ${if (result.optBoolean("ok")) "ok" else "refused"}")
                     reply(result)
                 } catch (e: Exception) {
-                    log("réponse non envoyée : ${e.javaClass.simpleName}")
+                    log("answer not sent: ${e.javaClass.simpleName}")
                 } finally {
                     invokes.release()
                 }

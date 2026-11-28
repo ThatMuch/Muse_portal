@@ -15,12 +15,12 @@ import java.io.IOException
 private const val TAG = "PortalMuse"
 private const val MAX_APPS = 12
 
-/** Les petites applications écrites par Muse, dans le stockage privé. */
+/** The small apps written by Muse, in private storage. */
 object AppStore {
     private fun directory(context: Context) = File(context.applicationContext.filesDir, "apps")
     private fun index(context: Context) = File(directory(context), "index.json")
 
-    /** L'adresse fictive d'une application : chacune a ainsi ses propres données. */
+    /** The app's made-up address: this gives each one its own data. */
     fun origin(name: String) = "https://$name.apps.portal.invalid"
 
     @Synchronized
@@ -40,10 +40,10 @@ object AppStore {
         if (apps.size >= MAX_APPS && apps.none { it.name == app.name }) return false
         return try {
             directory(context).mkdirs()
-            // Le nom a été vérifié par la commande : il ne contient ni point ni barre.
+            // The command has checked the name: it holds no dot or slash.
             File(directory(context), "${app.name}.html").writeText(html)
             write(context, apps.filter { it.name != app.name } + app)
-            Log.i(TAG, "application enregistrée (${html.length} caractères)")
+            Log.i(TAG, "app saved (${html.length} characters)")
             true
         } catch (e: IOException) {
             false
@@ -71,7 +71,7 @@ object AppStore {
         }
     }
 
-    /** L'appairage disparaît : les applications et leurs données aussi. */
+    /** The pairing goes away: so do the apps and their data. */
     @Synchronized
     fun clear(context: Context) {
         for (app in list(context)) remove(context, app.name)

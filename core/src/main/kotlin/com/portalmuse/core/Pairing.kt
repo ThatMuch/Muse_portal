@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/pairing.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/pairing.py
 package com.portalmuse.core
 
 import org.json.JSONObject
@@ -30,7 +30,7 @@ private const val MAX_CIPHERTEXT_B64_CHARS = 16384
 private const val TO_DEVICE = 0
 private const val FROM_DEVICE = 1
 
-/** Une étape du handshake a échoué ; [status] est l'erreur à renvoyer au téléphone. */
+/** A handshake step failed; [status] is the error to send back to the phone. */
 class PairingError(val status: String) : Exception(status) {
     companion object {
         const val INVALID_HELLO = "error_pairing_invalid_hello"
@@ -42,27 +42,27 @@ enum class PairingState { IDLE, WAIT_CLIENT_FINISHED, READY, PROVISIONING }
 
 class SessionKeys(val mobileTx: ByteArray, val mobileRx: ByteArray, val sessionId: ByteArray)
 
-/** Fonctions pures du protocole v5. */
+/** Pure functions of the v5 protocol. */
 object Pairing {
     private val B64URL = Regex("[A-Za-z0-9_-]+")
     private val DECIMAL = Regex("[0-9]+")
 
     fun b64urlEncode(data: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(data)
 
-    /** base64url sans bourrage, qui refuse tout ce que le firmware refuse. */
+    /** base64url without padding, which rejects everything the firmware rejects. */
     fun b64urlDecode(text: Any?, maxChars: Int = MAX_B64_CHARS): ByteArray {
-        require(text is String && text.length in 1..maxChars) { "longueur base64url invalide" }
-        require(text.length % 4 != 1 && B64URL.matches(text)) { "base64url invalide" }
+        require(text is String && text.length in 1..maxChars) { "invalid base64url length" }
+        require(text.length % 4 != 1 && B64URL.matches(text)) { "invalid base64url" }
         return Base64.getUrlDecoder().decode(text)
     }
 
-    /** Compteur décimal non signé sur 64 bits. */
+    /** Unsigned 64 bit decimal counter. */
     fun parseCounter(text: Any?): Long {
-        require(text is String && DECIMAL.matches(text)) { "compteur invalide" }
+        require(text is String && DECIMAL.matches(text)) { "invalid counter" }
         return java.lang.Long.parseUnsignedLong(text)
     }
 
-    /** Transcript canonique v5 ; son SHA-256 est le `transcript_hash`. */
+    /** Canonical v5 transcript; its SHA-256 is the `transcript_hash`. */
     fun buildTranscript(
         community: Boolean,
         authEpoch: Int,
@@ -77,10 +77,10 @@ object Pairing {
         deviceNonce: String,
     ): String {
         val button = policy == POLICY_BUTTON
-        require(button || (community && policy == POLICY_APP)) { "politique d'appairage non gérée : $policy" }
-        require(if (community) authEpoch == 0 else authEpoch > 0) { "époque d'authentification invalide" }
+        require(button || (community && policy == POLICY_APP)) { "unsupported pairing policy: $policy" }
+        require(if (community) authEpoch == 0 else authEpoch > 0) { "invalid authentication epoch" }
         val fields = listOf(deviceId, nodeId, mac, firmwareVersion, mobilePub, devicePub, mobileNonce, deviceNonce)
-        require(fields.all { it.isNotEmpty() }) { "les champs du transcript ne peuvent pas être vides" }
+        require(fields.all { it.isNotEmpty() }) { "transcript fields cannot be empty" }
         return listOf(
             "hatch-link-pairing-v$PAIRING_VERSION",
             "version=$PAIRING_VERSION",
@@ -131,11 +131,11 @@ object Pairing {
 }
 
 /**
- * État d'appairage côté appareil, mode communautaire seulement (`pairing_auth: none`,
- * politique `confirm_app`). Protège contre l'écoute passive, pas contre un intermédiaire actif.
+ * Device side pairing state, community mode only (`pairing_auth: none`, policy `confirm_app`). Protects against
+ * passive listening, not against an active man in the middle.
  *
- * Les méthodes qui font avancer le handshake renvoient une génération non nulle : le travail
- * différé la conserve et la vérifie avant d'agir.
+ * Methods that move the handshake forward return a non-zero generation: deferred work keeps it and checks it
+ * before acting.
  */
 class PairingSession(
     private val nodeId: String,
@@ -143,7 +143,7 @@ class PairingSession(
     private val mac: String,
     firmwareVersion: String,
     private val sdkToken: String? = null,
-    /** Horloge monotone en millisecondes. */
+    /** Monotonic clock in milliseconds. */
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val generateKey: () -> P256KeyPair = P256::generate,
     private val randomBytes: (Int) -> ByteArray = { size -> ByteArray(size).also(SecureRandom()::nextBytes) },
@@ -158,7 +158,7 @@ class PairingSession(
     private var rxCounter = 0L
     private var txCounter = 0L
 
-    /** Champs d'appairage de la réponse `get_device_info`. */
+    /** Pairing fields of the `get_device_info` response. */
     fun deviceInfo(): JSONObject = JSONObject()
         .put("device_id", deviceId)
         .put("mac", mac)
@@ -186,7 +186,7 @@ class PairingSession(
         clear()
     }
 
-    /** Ouvre une session à partir de `pairing_client_hello` ; renvoie `pairing_ready`. */
+    /** Opens a session from `pairing_client_hello`; returns `pairing_ready`. */
     @Synchronized
     fun handleHello(message: JSONObject): JSONObject {
         val version = message.opt("version")
@@ -199,7 +199,7 @@ class PairingSession(
         try {
             val mobilePub = Pairing.b64urlDecode(message.opt("mobile_pub"))
             val mobileNonce = Pairing.b64urlDecode(message.opt("mobile_nonce"))
-            require(mobileNonce.size == NONCE_BYTES) { "nonce invalide" }
+            require(mobileNonce.size == NONCE_BYTES) { "invalid nonce" }
             P256.decodePoint(mobilePub)
 
             val deviceKey = generateKey()
@@ -253,18 +253,18 @@ class PairingSession(
         }
     }
 
-    /** Déchiffre un enregistrement téléphone vers appareil. Tout échec efface la session. */
+    /** Decrypts a phone to device record. Any failure erases the session. */
     @Synchronized
     fun decrypt(envelope: JSONObject): String {
         val key = rxKey
         if (expire() || current == PairingState.IDLE || key == null) fail()
         try {
-            require(envelope.opt("session_id") == sessionId) { "autre session" }
+            require(envelope.opt("session_id") == sessionId) { "other session" }
             val counter = Pairing.parseCounter(envelope.opt("counter"))
-            require(counter == rxCounter) { "compteur inattendu" }
+            require(counter == rxCounter) { "unexpected counter" }
             val ciphertext = Pairing.b64urlDecode(envelope.opt("ciphertext"), MAX_CIPHERTEXT_B64_CHARS)
             val tag = Pairing.b64urlDecode(envelope.opt("tag"))
-            require(tag.size == TAG_BYTES) { "tag invalide" }
+            require(tag.size == TAG_BYTES) { "invalid tag" }
             val plain = Primitives.aesGcm(
                 false, key, Pairing.recordNonce(TO_DEVICE, counter),
                 Pairing.recordAad(sessionId, TO_DEVICE, counter), ciphertext + tag,
@@ -282,8 +282,8 @@ class PairingSession(
     }
 
     /**
-     * Confirme la session après le premier enregistrement, qui doit être exactement
-     * `{"action":"pairing_client_finished"}`. Renvoie la génération, ou 0.
+     * Confirms the session after the first record, which must be exactly
+     * `{"action":"pairing_client_finished"}`. Returns the generation, or 0.
      */
     @Synchronized
     fun handleClientFinished(command: JSONObject): Int {
@@ -299,7 +299,7 @@ class PairingSession(
         return generation
     }
 
-    /** Passe en provisioning depuis une session confirmée ; renvoie sa génération, ou 0. */
+    /** Moves to provisioning from a confirmed session; returns its generation, or 0. */
     @Synchronized
     fun markProvisioning(): Int {
         if (!expire() && current == PairingState.READY) {
@@ -314,11 +314,11 @@ class PairingSession(
     fun extendProvisioning(value: Int): Boolean =
         provisioning(value).also { if (it) deadline = clock() + PROVISIONING_TIMEOUT_MS }
 
-    /** Exécute [commit] sous le verrou si la session vaut encore. Pas d'appel réseau ni BLE. */
+    /** Runs [commit] under the lock if the session is still valid. No network or BLE calls. */
     @Synchronized
     fun commitProvisioning(value: Int, commit: () -> Boolean): Boolean = provisioning(value) && commit()
 
-    /** Scelle un enregistrement appareil vers téléphone ; `null` sans session ou si périmé. */
+    /** Seals a device to phone record; `null` without a session or if stale. */
     @Synchronized
     fun encryptJson(plaintext: String, value: Int = 0): JSONObject? {
         if ((value != 0 && value != generation) || expire() || current == PairingState.IDLE) return null
@@ -339,7 +339,7 @@ class PairingSession(
 
     fun encryptStatus(status: String, value: Int = 0): JSONObject? {
         val message = JSONObject().put("type", "status").put("status", status)
-        // Le jeton SDK ne voyage que chiffré, avec pairing_confirmed.
+        // The SDK token only travels encrypted, with pairing_confirmed.
         if (!sdkToken.isNullOrEmpty() && status == "pairing_confirmed") message.put("sdk_token", sdkToken)
         return encryptJson(message.toString(), value)
     }
@@ -362,7 +362,7 @@ class PairingSession(
         txCounter = 0
     }
 
-    /** Efface les clés à l'expiration mais garde la génération. */
+    /** Erases the keys on expiry but keeps the generation. */
     private fun expire(): Boolean {
         if (current == PairingState.IDLE || clock() <= deadline) return false
         clear()

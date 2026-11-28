@@ -5,16 +5,16 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * Le micro capté sans attendre l'appel : ce qui est dit pendant la connexion est gardé en mémoire,
- * puis rendu dans l'ordre dès que l'appel le demande, un peu plus vite que le temps réel.
- * Au-delà de [capacity] morceaux, les plus anciens sont oubliés.
+ * The microphone captured without waiting for the call: what is said while connecting is kept in memory, then
+ * handed out in order as soon as the call asks, a little faster than real time. Beyond [capacity] chunks, the
+ * oldest are forgotten.
  *
- * [capture] est bloquant et rend `null` quand la source s'arrête.
+ * [capture] is blocking and returns `null` when the source stops.
  */
 class PreRoll(
     private val capture: () -> ByteArray?,
     capacity: Int,
-    /** L'écart minimal entre deux morceaux rendus : borne le débit de rattrapage. */
+    /** The minimum gap between two chunks handed out: bounds the catch up rate. */
     @Volatile var minGapMillis: Long = 10,
 ) {
     private val frames = LinkedBlockingDeque<ByteArray>(capacity)
@@ -29,18 +29,18 @@ class PreRoll(
                 while (!frames.offerLast(frame)) frames.pollFirst()
             }
         } catch (e: RuntimeException) {
-            // La source a été fermée sous nos pieds : la capture est finie.
+            // The source was closed under our feet: capture is over.
         } finally {
             finished = true
         }
     }
 
-    /** Le plus ancien morceau, en l'attendant au besoin ; `null` après [stop] ou à la fin de la source. */
+    /** The oldest chunk, waiting for it if needed; `null` after [stop] or at the end of the source. */
     fun read(): ByteArray? {
         val wait = minGapMillis - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - releasedAt)
         if (releasedAt != 0L && wait > 0) Thread.sleep(wait)
         while (!stopped) {
-            // « finished » est lu avant la file : rien d'ajouté juste avant la fin n'est perdu.
+            // "finished" is read before the queue: nothing added right before the end is lost.
             val over = finished
             val frame = frames.pollFirst(20, TimeUnit.MILLISECONDS)
             if (frame != null) {
@@ -52,21 +52,21 @@ class PreRoll(
         return null
     }
 
-    /** Oublie le son gardé. N'attend pas la fin de la capture. */
+    /** Forgets the kept sound. Does not wait for the end of capture. */
     fun stop() {
         stopped = true
         frames.clear()
     }
 
-    /** À appeler après [stop], avant de libérer la source. */
+    /** Call after [stop], before releasing the source. */
     fun join(millis: Long) = worker.join(millis)
 }
 
-/** Des changements de cadence en PCM 16 bits petit-boutiste, par interpolation linéaire. */
+/** Rate changes in 16 bit little-endian PCM, by linear interpolation. */
 object Upsampler {
     /**
-     * 24 kHz vers 48 kHz ; [previous] est le dernier échantillon du morceau précédent. Comme le
-     * client Linux : le milieu de deux échantillons, puis l'échantillon.
+     * 24 kHz to 48 kHz; [previous] is the last sample of the previous chunk. Like the Linux client: the middle
+     * of two samples, then the sample.
      */
     fun to48k(input: ByteArray, previous: Int): ByteArray {
         val output = ByteArray(input.size / 2 * 4)
@@ -83,7 +83,7 @@ object Upsampler {
         return output
     }
 
-    /** L'échantillon [index] ; le dernier par défaut. */
+    /** The sample [index]; the last one by default. */
     fun last(input: ByteArray, index: Int = input.size / 2 - 1): Int =
         (input[2 * index].toInt() and 0xff) or (input[2 * index + 1].toInt() shl 8)
 
@@ -92,7 +92,7 @@ object Upsampler {
         fun sample(i: Int) = (input[2 * i].toInt() and 0xff) or (input[2 * i + 1].toInt() shl 8)
         val output = ByteArray(count * 3 / 2 * 2)
         for (j in 0 until output.size / 2) {
-            // La position j × 2/3 dans l'entrée, comptée en tiers d'échantillon.
+            // Position j × 2/3 in the input, counted in thirds of a sample.
             val position = j * 2
             val i = position / 3
             val before = sample(i)

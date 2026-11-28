@@ -14,7 +14,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
-/** Vraie WebSocket contre un serveur local. */
+/** Real WebSocket against a local server. */
 class WebSocketTest {
     @Test fun sendsTheBearerWithoutCompressionAndEchoesBinaryFrames() {
         MockWebServer().use { server ->

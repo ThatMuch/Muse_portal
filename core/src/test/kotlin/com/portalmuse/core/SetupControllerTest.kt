@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Cas principaux de linux/tests/test_ble_setup.py. */
+/** Main cases of linux/tests/test_ble_setup.py. */
 class SetupControllerTest {
     private val v = pairingVector("community_app_v5")
 
@@ -154,7 +154,7 @@ class SetupControllerTest {
         assertEquals(1, h.transport.disconnects)
     }
 
-    /** Sur Android, une exception qui s'échappe d'un fil arrête toute l'application. */
+    /** On Android, an exception escaping a thread stops the whole application. */
     @Test fun unexpectedProvisioningCrashIsContained() {
         val h = Harness(crash = true)
         h.pair()
@@ -179,7 +179,7 @@ class SetupControllerTest {
         assertEquals("error_encryption_required", h.transport.messages.last())
     }
 
-    /** Comme la référence : sans session, ce statut n'a pas le droit de partir en clair. */
+    /** Like the reference: without a session, this status may not go out in clear. */
     @Test fun invalidJsonIsReportedOnlyInsideASession() {
         val h = Harness()
         h.controller.handleMessage("pas du json".toByteArray())

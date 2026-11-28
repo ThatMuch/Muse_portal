@@ -8,12 +8,13 @@ voice and video calls with your Muse, "Hey Muse" hands free, and a screen your M
 > the service changes. You need your own Muse account and your own SDK token, and you agree to Meta's
 > Gadget SDK terms. Use it at your own risk.
 
-The app's interface is currently **in French**, and so are the code comments. Both are
-[great first contributions](CONTRIBUTING.md#good-first-contributions).
+The interface is in **French on a French device and in English everywhere else**, including the
+messages the app sends to your Muse. More languages are a
+[great first contribution](CONTRIBUTING.md#good-first-contributions).
 
 ## Screenshots
 
-Taken on a Portal 10" (1280 × 800), interface in French, with demo content: sample city, timer,
+Taken on a Portal 10" (1280 × 800), French interface, with demo content: sample city, timer,
 messages and suggestions, and a plain blue orb where your Muse's avatar appears.
 
 ![Home screen: clock, weather, a running timer, quick actions and the call button](docs/screenshots/home.png)
@@ -67,7 +68,7 @@ The app never unlocks the bootloader and never removes or disables a system app.
 Download and verify the wake word dependencies once (about 1.3 MB):
 
 ```bash
-./tools/preparer-reveil.sh
+./tools/prepare-wakeword.sh
 ```
 
 On macOS, use Android Studio's JDK:
@@ -96,17 +97,17 @@ adb shell monkey -p com.portalmuse.gadget -c android.intent.category.LAUNCHER 1
 
 Open the **maintenance menu** by holding the bottom left corner for 2 seconds.
 
-1. **Connexion à Muse > Jeton SDK Muse**: enter your token. To avoid typing it, touch the field, then
+1. **Muse connection > Muse SDK token**: enter your token. To avoid typing it, touch the field, then
    run this on the computer; it types the token from your clipboard without showing it:
 
 ```bash
-./tools/saisir-jeton.sh
+./tools/enter-token.sh
 ```
 
-2. **Connexion à Muse > Ouvrir l'appairage Bluetooth**. The Portal advertises as `MuseGadgetXXXXXX`.
+2. **Muse connection > Open Bluetooth pairing**. The Portal advertises as `MuseGadgetXXXXXX`.
 3. In the Muse phone app: Settings > Devices (developer mode), pair it.
-4. Allow the microphone when asked. Enable "Hey Muse" under **Voix et appels** if you want it.
-5. **Écran > Autoriser l'écran au démarrage** lets the kiosk come back after a reboot or a crash.
+4. Allow the microphone when asked. Enable "Hey Muse" under **Voice and calls** if you want it.
+5. **Screen > Allow the screen at startup** lets the kiosk come back after a reboot or a crash.
 
 ## Using it
 
@@ -154,7 +155,7 @@ tools/  Dependency download, token entry.
   empty feed, or one older than 3 hours, asks for it again (a message in your conversation, at most
   every 30 minutes).
 - **Using the screen**: calls are announced as a `mcu-wearable`, the only device type the SDK admits
-  for them, so a Muse may not think of the screen. **What Muse may do > teach the screen** sends it a
+  for them, so a Muse may not think of the screen. **What Muse may do > Teach Muse to use this screen** sends it a
   message saying what the Portal can show. Your Muse's own permission requests stay on the phone: the
   gadget protocol has no way to answer them.
 - **Night mode** only turns the light off; the device stays online and listening.

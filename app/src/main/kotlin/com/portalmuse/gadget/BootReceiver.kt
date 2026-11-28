@@ -9,24 +9,23 @@ import android.util.Log
 private const val TAG = "PortalMuse"
 
 /**
- * Relance l'app après un redémarrage du Portal ou une mise à jour. La session Muse repart
- * toujours. Android 10 n'autorise l'ouverture de l'écran depuis l'arrière-plan que si
- * l'utilisateur a accordé « Afficher par-dessus les autres applications ».
+ * Starts the app again after a Portal reboot or an update. The Muse session always restarts. Android 10 only
+ * lets an app open a screen from the background if the user granted "Display over other apps".
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val booted = intent.action == Intent.ACTION_BOOT_COMPLETED
         if (!booted && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        Log.i(TAG, if (booted) "démarrage du Portal" else "application mise à jour")
-        // Un redémarrage pendant un appairage laisserait le nom Bluetooth provisoire.
+        Log.i(TAG, if (booted) "Portal startup" else "app updated")
+        // A reboot during pairing would leave the temporary Bluetooth name in place.
         if (!PairingStatus.open) GadgetService.restoreBluetoothName(context)
         context.startForegroundService(Intent(context, GadgetService::class.java).setAction(GadgetService.ACTION_CONNECT))
-        // Après une mise à jour, le kiosque ne revient que s'il était à l'écran.
+        // After an update, the kiosk only comes back if it was on screen.
         if (!booted) return KioskReturn.reopen(context, afterUpdate = true)
         if (SystemSettings.canDrawOverlays(context)) {
             context.startActivity(Intent(context, KioskActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } else {
-            Log.w(TAG, "écran au démarrage non autorisé : seule la session Muse est relancée")
+            Log.w(TAG, "screen at startup not allowed: only the Muse session is restarted")
         }
     }
 }

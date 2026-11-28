@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -51,7 +52,7 @@ private const val NIGHT_WAKE_MS = 30_000L
 private const val SHORTCUT_SCHEME = "portal-shortcut"
 private const val TIMER_SCHEME = "portal-timer"
 
-/** Tableau de bord en plein écran. Menu caché : maintenir le coin en bas à gauche. */
+/** Full screen dashboard. Hidden menu: hold the bottom left corner. */
 class KioskActivity : Activity(), ScreenPresenter {
     private lateinit var settings: Settings
     private lateinit var menu: MaintenanceMenu
@@ -69,9 +70,9 @@ class KioskActivity : Activity(), ScreenPresenter {
     private lateinit var alarm: TimerPanel
     private lateinit var notices: Notices
     private var keyboardShown = false
-    /** Dernier toucher : à la nuit, l'écran reste éclairé un moment après. */
+    /** Last touch: at night, the screen stays lit for a moment afterwards. */
     private var lastTouch = 0L
-    /** Dernier usage, toucher ou panneau : le cadre photo attend à partir de là. */
+    /** Last use, touch or panel: the photo frame waits from this point. */
     private var lastUse = SystemClock.elapsedRealtime()
     private var swallowGesture = false
     private val ticker = object : Runnable {
@@ -124,9 +125,9 @@ class KioskActivity : Activity(), ScreenPresenter {
             updateListening()
             panelsChanged()
         }
-        // Les boutons de volume du Portal règlent la voix de Muse.
+        // The Portal's volume buttons set the volume of Muse's voice.
         volumeControlStream = AudioManager.STREAM_MUSIC
-        // Au-dessus des panneaux : on regarde ce que Muse montre tout en lui parlant.
+        // Above the panels: you look at what Muse shows while talking to it.
         shown = ScreenOverlay(this, root) { panelsChanged() }
         hub = HubPanel(this, root) { panelsChanged() }
         feed = FeedPanel(this, root, onAsk = { conversation.sendShortcut(it) }, onStale = ::refreshFeed) {
@@ -135,7 +136,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         apps = AppPanel(this, root) { panelsChanged() }
         photoFrame = PhotoFrame(this, root)
         dimmer = NightDimmer(this, root)
-        // Une question et les bandeaux passent au-dessus de tout, même la nuit.
+        // A question and the banners go above everything, even at night.
         photos = PhotoPanel(this, root) {
             updateListening()
             panelsChanged()
@@ -147,7 +148,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         notices = Notices(this, root) { refreshAmbience() }
         root.addView(pairingBanner)
         wakeHint = TextView(this).apply {
-            text = "Dites « Hey Muse »"
+            text = tr("Say “Hey Muse”", "Dites « Hey Muse »")
             textSize = 16f
             setTextColor(Ui.FAINT)
             visibility = View.GONE
@@ -155,7 +156,7 @@ class KioskActivity : Activity(), ScreenPresenter {
             layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.START)
                 .apply { setMargins(margin, margin, margin, margin + Ui.dp(this@KioskActivity, 10)) }
         }
-        // Sous les panneaux, qui couvrent l'écran quand ils sont ouverts.
+        // Under the panels, which cover the screen when open.
         root.addView(wakeHint, root.indexOfChild(errorBanner) + 1)
         setContentView(root)
         root.viewTreeObserver.addOnGlobalLayoutListener {
@@ -165,9 +166,9 @@ class KioskActivity : Activity(), ScreenPresenter {
             keyboardShown = hidden > KEYBOARD_MIN_DP * resources.displayMetrics.density
             conversation.keyboardShown = keyboardShown
         }
-        // Remet le nom Bluetooth d'origine si l'app a été tuée pendant un appairage.
+        // Restores the original Bluetooth name if the app was killed during pairing.
         if (!PairingStatus.open) GadgetService.restoreBluetoothName(this)
-        // Le service garde la session Muse, même une fois le kiosque quitté.
+        // The service keeps the Muse session, even after leaving the kiosk.
         startForegroundService(Intent(this, GadgetService::class.java).setAction(GadgetService.ACTION_CONNECT))
         loadDashboard()
     }
@@ -189,7 +190,7 @@ class KioskActivity : Activity(), ScreenPresenter {
     override fun onStop() {
         PairingStatus.observe(null)
         AvatarStore.remove(avatarChanged)
-        // Aucune écoute quand le kiosque n'est plus à l'écran : l'appel est raccroché.
+        // No listening once the kiosk is off screen: the call is hung up.
         TimerCenter.onChange = null
         hub.close()
         apps.close()
@@ -245,10 +246,10 @@ class KioskActivity : Activity(), ScreenPresenter {
     }
 
     /**
-     * « Hey Muse » n'écoute que si l'utilisateur l'a activé et que le kiosque est seul à l'écran :
-     * ni menu, ni note vocale, ni appel.
+     * "Hey Muse" only listens if the user enabled it and the kiosk is alone on screen: no menu, voice note or
+     * call.
      */
-    /** La sensibilité ne se lit qu'au démarrage de l'écoute. */
+    /** The sensitivity is only read when listening starts. */
     private fun restartListening() {
         listener?.stop()
         listener = null
@@ -270,7 +271,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         showListening()
     }
 
-    /** La page intégrée signale elle-même l'écoute, sous l'avatar ; les autres ont une mention. */
+    /** The built-in page shows listening itself, under the avatar; other pages get a label. */
     private fun showListening() {
         val listening = listener != null
         val home = web.url == Settings.WELCOME_URL
@@ -287,12 +288,12 @@ class KioskActivity : Activity(), ScreenPresenter {
         pauseHomeAvatar()
     }
 
-    /** Un panneau demande l'attention : ni cadre photo ni assombrissement. */
+    /** A panel asks for attention: no photo frame and no dimming. */
     private fun busy() =
         phone.isOpen || conversation.isOpen || shown.isOpen || questions.isOpen || photos.isOpen || apps.isOpen ||
             feed.isOpen || hub.isOpen || alarm.isOpen || PairingStatus.open
 
-    /** Applique le mode nuit et ouvre ou ferme le cadre photo, selon l'heure et l'inactivité. */
+    /** Applies night mode and opens or closes the photo frame, depending on the time and inactivity. */
     private fun refreshAmbience() {
         if (!::notices.isInitialized) return
         val now = SystemClock.elapsedRealtime()
@@ -308,27 +309,27 @@ class KioskActivity : Activity(), ScreenPresenter {
         } else if (wasOpen || (resumed && hasWindowFocus() && now - lastUse >= photos.idleMinutes * 60_000L)) {
             photoFrame.open(photos)
         }
-        // Dans le noir, inutile de décoder la vidéo de l'accueil.
+        // In the dark there is no point decoding the home video.
         if (wasOpen != photoFrame.isOpen || wasDimmed != dimmer.dimmed) pauseHomeAvatar()
     }
 
-    /** « Plus » : le Fil, les messages, la photo et les applications, selon ce qui est permis. */
+    /** "More": the Feed, messages, photo and apps, depending on what is allowed. */
     private fun showMore() {
         val tiles = buildList {
-            if (settings.screenAllowed) add(HubPanel.Tile(R.drawable.ic_feed, "Fil") { feed.open() })
+            if (settings.screenAllowed) add(HubPanel.Tile(R.drawable.ic_feed, tr("Feed", "Fil")) { feed.open() })
             if (settings.historyShown) {
                 add(HubPanel.Tile(R.drawable.ic_history, "Messages") { conversation.showHistory() })
             }
             if (settings.cameraAllowed) add(HubPanel.Tile(R.drawable.ic_camera, "Photo", ::look))
             if (settings.screenAllowed && AppStore.list(this@KioskActivity).isNotEmpty()) {
-                add(HubPanel.Tile(R.drawable.ic_apps, "Applications") { apps.showList() })
+                add(HubPanel.Tile(R.drawable.ic_apps, tr("Apps", "Applications")) { apps.showList() })
             }
         }
         hub.open(tiles)
     }
 
     override fun showFeed() {
-        // Pendant un appel, le fil attendra qu'on l'ouvre : il masquerait Muse.
+        // During a call, the feed waits to be opened: it would hide Muse.
         if (phone.isOpen) return
         photoFrame.close()
         conversation.close()
@@ -341,7 +342,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         return apps.open(name)
     }
 
-    /** Un minuteur a démarré, fini ou été annulé. */
+    /** A timer started, ended or was cancelled. */
     private fun timersChanged() {
         if (!::notices.isInitialized) return
         if (TimerCenter.ringing.isNotEmpty()) photoFrame.close()
@@ -375,12 +376,18 @@ class KioskActivity : Activity(), ScreenPresenter {
 
     override fun askPhoto(reason: String?, reply: (PhotoResult) -> Unit): Boolean {
         photoFrame.close()
-        return photos.ask("${settings.museName ?: "Muse"} aimerait voir", reason, reply)
+        return photos.ask(tr(
+            "${settings.museName ?: "Muse"} would like to see",
+            "${settings.museName ?: "Muse"} aimerait voir",
+        ), reason, reply)
     }
 
-    /** « Regarde ça », à l'initiative de l'utilisateur. */
+    /** "Look at this", started by the user. */
     private fun look() {
-        photos.ask("Montrer à ${settings.museName ?: "Muse"}", null) { result ->
+        photos.ask(tr(
+            "Show ${settings.museName ?: "Muse"}",
+            "Montrer à ${settings.museName ?: "Muse"}",
+        ), null) { result ->
             if (result is PhotoResult.Taken) conversation.sendPhoto(result.jpeg)
         }
     }
@@ -394,16 +401,16 @@ class KioskActivity : Activity(), ScreenPresenter {
         refreshAmbience()
     }
 
-    /** Redemande le fil en arrière-plan : la réponse écrite reste dans la conversation. */
+    /** Asks for the feed again in the background: the written reply stays in the conversation. */
     private fun refreshFeed(done: () -> Unit): Boolean {
         val chat = MuseSession.chat(settings.chatSession()) ?: return false
         thread(name = "feed-refresh") {
             try {
                 chat.sendText(FeedPanel.QUIET_REFRESH)
             } catch (e: IOException) {
-                Log.w(TAG, "fil : demande en échec (${e.javaClass.simpleName})")
+                Log.w(TAG, "feed: request failed (${e.javaClass.simpleName})")
             } catch (e: RuntimeException) {
-                Log.w(TAG, "fil : demande en échec (${e.javaClass.simpleName})")
+                Log.w(TAG, "feed: request failed (${e.javaClass.simpleName})")
             } finally {
                 handler.post(done)
             }
@@ -411,7 +418,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         return true
     }
 
-    /** Les boutons d'actions rapides, sur la page d'accueil intégrée et seulement une fois appairé. */
+    /** The quick action buttons, on the built-in home page and only once paired. */
     private fun showShortcutsOnHome() {
         if (!::web.isInitialized || web.url != Settings.WELCOME_URL) return
         val labels = if (SecretStore(this).pairing != null) settings.shortcuts.map { it.label } else emptyList()
@@ -433,8 +440,8 @@ class KioskActivity : Activity(), ScreenPresenter {
     override fun closeScreen() = shown.close()
 
     /**
-     * Glisse l'avatar dans la page d'accueil intégrée, et nulle part ailleurs : un tableau de bord
-     * distant ne le reçoit jamais. La page ne peut pas lire les fichiers de l'app.
+     * Slips the avatar into the built-in home page, and nowhere else: a remote dashboard never receives it. The
+     * page cannot read the app's files.
      */
     private fun showAvatarOnHome() {
         if (web.url != Settings.WELCOME_URL) return
@@ -451,7 +458,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         }
     }
 
-    /** Inutile de décoder la vidéo de l'accueil derrière un panneau. */
+    /** No point decoding the home video behind a panel. */
     private fun pauseHomeAvatar() {
         if (web.url != Settings.WELCOME_URL || !::shown.isInitialized) return
         val covered = conversation.isOpen || phone.isOpen || shown.isOpen || photoFrame.isOpen || dimmer.dimmed
@@ -461,10 +468,10 @@ class KioskActivity : Activity(), ScreenPresenter {
     private fun dataUrl(file: File, type: String): String? = try {
         "data:$type;base64," + Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
     } catch (e: IOException) {
-        null // le fichier vient d'être remplacé : le prochain avis le rechargera
+        null // the file has just been replaced: the next notification reloads it
     }
 
-    /** Une adresse « data » ne contient ni guillemet ni retour à la ligne. */
+    /** A "data" address holds no quote or line break. */
     private fun quote(value: String?) = value?.let { "\"$it\"" } ?: "null"
 
     private fun woken(mic: WakeMic) {
@@ -481,13 +488,16 @@ class KioskActivity : Activity(), ScreenPresenter {
     private fun listeningFailed(reason: String) {
         listener = null
         showListening()
-        Toast.makeText(this, "« Hey Muse » indisponible : $reason.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, tr(
+            "“Hey Muse” unavailable: $reason.",
+            "« Hey Muse » indisponible : $reason.",
+        ), Toast.LENGTH_LONG).show()
     }
 
-    @Deprecated("Le retour navigue dans la page et ne quitte pas le kiosque.")
+    @Deprecated("Back navigates within the page and does not leave the kiosk.")
     override fun onBackPressed() {
         when {
-            // Une question se ferme par ses boutons.
+            // A question is closed with its buttons.
             questions.isOpen -> Unit
             photos.isOpen -> photos.cancel()
             apps.isOpen -> apps.close()
@@ -509,13 +519,13 @@ class KioskActivity : Activity(), ScreenPresenter {
         phone.onPermissionResult(requestCode, granted)
     }
 
-    /** Observe l'appui long sans consommer le toucher : la page reste utilisable. */
+    /** Watches for the long press without consuming the touch: the page stays usable. */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         val density = resources.displayMetrics.density
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                // Le toucher qui réveille l'écran ou quitte le cadre ne touche rien dessous. Une
-                // question ou un bandeau urgent éclaire déjà l'écran.
+                // The touch that wakes the screen or leaves the frame touches nothing underneath. A question or
+                // an urgent banner already lights the screen.
                 swallowGesture = photoFrame.isOpen || dimmer.dimmed
                 lastTouch = SystemClock.elapsedRealtime()
                 lastUse = lastTouch
@@ -559,7 +569,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         setPadding(pad, pad, pad, pad)
         visibility = View.GONE
         layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, position).apply {
-            // Le haut de l'écran du Portal est occupé par la surcouche système.
+            // The top of the Portal's screen is taken by the system overlay.
             topMargin = 4 * pad
             bottomMargin = pad
         }
@@ -573,8 +583,8 @@ class KioskActivity : Activity(), ScreenPresenter {
         settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = false
         settings.allowContentAccess = false
-        // Un appui long ne sélectionne pas le texte : la sélection annulait l'ouverture du menu.
-        // Les champs de saisie le gardent (coller), et les appuis longs de la page restent actifs.
+        // A long press does not select text: selecting cancelled the opening of the menu. Input fields keep it
+        // (to paste), and the page's own long presses stay active.
         isHapticFeedbackEnabled = false
         setOnLongClickListener { hitTestResult.type != WebView.HitTestResult.EDIT_TEXT_TYPE }
         webViewClient = object : WebViewClient() {
@@ -586,7 +596,7 @@ class KioskActivity : Activity(), ScreenPresenter {
                     return true
                 }
                 if (request.url.scheme != SHORTCUT_SCHEME) return request.url.scheme !in listOf("http", "https")
-                // Seule la page intégrée peut envoyer un message au nom de l'utilisateur.
+                // Only the built-in page can send a message in the user's name.
                 if (view.url == Settings.WELCOME_URL) {
                     val index = request.url.schemeSpecificPart.toIntOrNull()
                     this@KioskActivity.settings.shortcuts.getOrNull(index ?: -1)?.let { conversation.sendShortcut(it.message) }
@@ -596,8 +606,11 @@ class KioskActivity : Activity(), ScreenPresenter {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (!request.isForMainFrame) return
-                Log.w(TAG, "page injoignable : ${error.errorCode} ${error.description}")
-                showLoadError("Page injoignable (${error.description}). Nouvel essai dans 15 s.")
+                Log.w(TAG, "page unreachable: ${error.errorCode} ${error.description}")
+                showLoadError(tr(
+                    "Page unreachable (${error.description}). Trying again in 15 s.",
+                    "Page injoignable (${error.description}). Nouvel essai dans 15 s.",
+                ))
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -609,7 +622,7 @@ class KioskActivity : Activity(), ScreenPresenter {
             }
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                Log.w(TAG, "moteur de rendu arrêté, recréation de l'écran")
+                Log.w(TAG, "renderer stopped, recreating the screen")
                 recreate()
                 return true
             }

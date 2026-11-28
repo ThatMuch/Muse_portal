@@ -25,9 +25,8 @@ import java.io.IOException
 private const val TAG = "PortalMuse"
 
 /**
- * L'avatar du Muse : l'image fixe, et par-dessus la vidéo de l'état courant, en boucle et sans
- * son. Il n'existe pas de vidéo « en train de parler » : l'image respire doucement à la place.
- * Les lecteurs ne tournent que pendant que la vue est [active].
+ * The Muse's avatar: the still picture and, on top, the video of the current state, looping and muted. There is
+ * no "speaking" video: the picture breathes gently instead. Players only run while the view is [active].
  */
 @SuppressLint("ViewConstructor")
 class AvatarView(context: Context) : FrameLayout(context), TextureView.SurfaceTextureListener {
@@ -65,7 +64,7 @@ class AvatarView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
         addView(still, LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(video, LayoutParams(MATCH_PARENT, MATCH_PARENT))
         video.surfaceTextureListener = this
-        // Le bas se fond dans le noir du panneau : le personnage n'est pas coupé net.
+        // The bottom fades into the black of the panel, so the character is not cut off sharply.
         val fade = View(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.TRANSPARENT, Ui.PANEL),
@@ -75,7 +74,7 @@ class AvatarView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
         visibility = View.GONE
     }
 
-    /** Relit les fichiers ; la vue se cache s'il n'y a pas d'avatar. */
+    /** Reads the files again; the view hides when there is no avatar. */
     fun reload() {
         files = AvatarStore.current(context)
         val image = files?.image
@@ -129,20 +128,20 @@ class AvatarView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
             }
             created.setOnPreparedListener { it.start() }
             created.setOnErrorListener { _, what, extra ->
-                Log.w(TAG, "avatar : vidéo illisible ($what, $extra)")
+                Log.w(TAG, "avatar: unreadable video ($what, $extra)")
                 video.alpha = 0f
                 true
             }
             created.prepareAsync()
         } catch (e: IOException) {
-            Log.w(TAG, "avatar : vidéo illisible")
+            Log.w(TAG, "avatar: unreadable video")
             release()
         } catch (e: IllegalStateException) {
             release()
         }
     }
 
-    /** Remplit le carré sans déformer. */
+    /** Fills the square without distortion. */
     private fun crop(width: Int, height: Int) {
         if (width <= 0 || height <= 0 || video.width == 0 || video.height == 0) return
         val scale = maxOf(video.width / width.toFloat(), video.height / height.toFloat())

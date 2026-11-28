@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -20,8 +21,8 @@ import com.portalmuse.core.AppPage
 private const val IDLE_CLOSE_MS = 10 * 60_000L
 
 /**
- * Les petites applications : leur liste en tuiles, et celle qu'on ouvre, enfermée dans une vue
- * sans réseau, sans fichiers, sans micro ni caméra, et sans aucun pont vers le Portal.
+ * The small apps: their list as tiles, and the open one, locked in a view with no network, no files, no
+ * microphone or camera, and no bridge to the Portal.
  */
 class AppPanel(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
@@ -40,7 +41,10 @@ class AppPanel(private val activity: Activity, root: FrameLayout, private val on
                 .apply { setMargins(dp(48), dp(56), 0, 0) },
         )
         addView(
-            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, "Fermer").apply { setOnClickListener { close() } },
+            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, tr(
+                "Close",
+                "Fermer",
+            )).apply { setOnClickListener { close() } },
             FrameLayout.LayoutParams(dp(64), dp(64), Gravity.TOP or Gravity.END)
                 .apply { setMargins(0, dp(40), dp(40), 0) },
         )
@@ -52,7 +56,7 @@ class AppPanel(private val activity: Activity, root: FrameLayout, private val on
 
     val isOpen get() = panel.visibility == View.VISIBLE
 
-    /** Laisse voir les boutons d'un appel ou d'une conversation en cours, en bas. */
+    /** Keeps the buttons of an ongoing call or conversation visible at the bottom. */
     var bottomRoom = false
         set(value) {
             field = value
@@ -61,7 +65,7 @@ class AppPanel(private val activity: Activity, root: FrameLayout, private val on
             }
         }
 
-    /** Un toucher repousse la fermeture automatique. */
+    /** A touch postpones the automatic closing. */
     fun touched() {
         if (!isOpen) return
         main.removeCallbacks(idle)
@@ -70,7 +74,7 @@ class AppPanel(private val activity: Activity, root: FrameLayout, private val on
 
     fun showList() {
         reset()
-        title.text = "Applications"
+        title.text = tr("Apps", "Applications")
         val grid = GridLayout(activity).apply { columnCount = 4 }
         for (app in AppStore.list(activity)) {
             val tile = Ui.pill(activity, app.title, Ui.SURFACE).apply {
@@ -95,7 +99,10 @@ class AppPanel(private val activity: Activity, root: FrameLayout, private val on
         }
         content.addView(ScrollView(activity).apply { addView(column) })
         content.addView(
-            Ui.label(activity, 18f, Ui.FAINT).apply { text = "Appui long sur une tuile pour la supprimer" },
+            Ui.label(activity, 18f, Ui.FAINT).apply { text = tr(
+                "Hold a tile to delete it",
+                "Appui long sur une tuile pour la supprimer",
+            ) },
             FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
                 .apply { bottomMargin = dp(24) },
         )
@@ -153,12 +160,15 @@ class AppPanel(private val activity: Activity, root: FrameLayout, private val on
 
     private fun confirmRemoval(name: String, label: String) {
         AlertDialog.Builder(activity, android.R.style.Theme_Material_Light_Dialog_Alert)
-            .setTitle("Supprimer « $label » ?").setMessage("Ses données sont effacées aussi.")
-            .setPositiveButton("Supprimer") { _, _ ->
+            .setTitle(tr("Delete “$label”?", "Supprimer « $label » ?")).setMessage(tr(
+                "Its data is erased too.",
+                "Ses données sont effacées aussi.",
+            ))
+            .setPositiveButton(tr("Delete", "Supprimer")) { _, _ ->
                 AppStore.remove(activity, name)
                 if (AppStore.list(activity).isEmpty()) close() else showList()
             }
-            .setNegativeButton("Annuler", null)
+            .setNegativeButton(tr("Cancel", "Annuler"), null)
             .show()
     }
 

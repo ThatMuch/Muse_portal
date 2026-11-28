@@ -20,9 +20,9 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.LinearLayout
 import android.widget.TextView
 
-/** Petits éléments communs aux panneaux posés sur le kiosque : noir, gris et trois couleurs. */
+/** Small elements shared by the panels laid over the kiosk: black, grey and three colors. */
 object Ui {
-    /** Noir, comme le fond de l'avatar en version sombre. */
+    /** Black, like the background of the dark version of the avatar. */
     const val PANEL = 0xFF000000.toInt()
     const val SURFACE = 0xFF1C1C1E.toInt()
     const val MUTED = 0xFF8E8E93.toInt()
@@ -42,7 +42,7 @@ object Ui {
     fun spaced(context: Context, top: Int, height: Int = WRAP_CONTENT) =
         LinearLayout.LayoutParams(MATCH_PARENT, height).apply { topMargin = dp(context, top) }
 
-    /** Bouton arrondi à libellé, assez grand pour le doigt. */
+    /** Rounded button with a label, large enough for a finger. */
     fun pill(context: Context, text: String, fill: Int) = TextView(context).apply {
         this.text = text
         textSize = 22f
@@ -55,7 +55,7 @@ object Ui {
         background = pressable(GradientDrawable().apply { cornerRadius = dp(context, BUTTON_DP / 2).toFloat() }, fill)
     }
 
-    /** Bouton rond à pictogramme ; [description] est lue par les aides d'accessibilité. */
+    /** Round button with an icon; [description] is read by accessibility tools. */
     fun round(context: Context, icon: Int, fill: Int, description: String) = ImageView(context).apply {
         setImageResource(icon)
         scaleType = ImageView.ScaleType.CENTER
@@ -71,7 +71,9 @@ object Ui {
         RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), it, null)
     }
 
-    /** La colonne du panneau à gauche, l'avatar à droite quand il y en a un, la croix en haut à droite. */
+    /**
+     * The panel's column on the left, the avatar on the right when there is one, the cross at the top right.
+     */
     fun stage(context: Context, avatar: AvatarView, column: LinearLayout, close: View) = FrameLayout(context).apply {
         val row = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -83,7 +85,7 @@ object Ui {
             )
         }
         addView(row, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-        // Sans avatar la colonne prend toute la largeur : la croix reste au-dessus de la marge.
+        // Without an avatar the column takes the whole width: the cross stays above the margin.
         addView(
             close,
             FrameLayout.LayoutParams(dp(context, 64), dp(context, 64), Gravity.TOP or Gravity.END)
@@ -91,7 +93,7 @@ object Ui {
         )
     }
 
-    /** Les boutons d'un panneau, centrés sous le texte. */
+    /** A panel's buttons, centered under the text. */
     fun actions(context: Context, vararg buttons: View) = LinearLayout(context).apply {
         gravity = Gravity.CENTER
         for (button in buttons) {
@@ -104,10 +106,10 @@ object Ui {
         }
     }
 
-    /** Une phrase d'un échange ; [ignored] : restée sans réponse. */
+    /** One sentence of an exchange; [ignored]: left unanswered. */
     class Line(val fromUser: Boolean, val text: String, val ignored: Boolean = false)
 
-    /** Comme des sous-titres : vos phrases en gris et plus petites, celles de Muse en blanc. */
+    /** Like subtitles: your sentences grey and smaller, Muse's in white. */
     fun dialogue(lines: List<Line>): CharSequence {
         val out = SpannableStringBuilder()
         for (line in lines) {
@@ -125,7 +127,7 @@ object Ui {
         return out
     }
 
-    /** Mise en forme minimale du Markdown : titres, puces et gras. */
+    /** Minimal Markdown formatting: headings, bullets and bold. */
     fun formatted(text: String): CharSequence {
         val plain = text.replace(Regex("(?m)^#{1,6}\\s+"), "").replace(Regex("(?m)^(\\s*)[-*]\\s+"), "$1•  ")
         val out = SpannableStringBuilder()

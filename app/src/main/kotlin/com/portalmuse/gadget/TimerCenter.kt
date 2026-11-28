@@ -17,8 +17,8 @@ private const val RING_LIMIT_MS = 2 * 60_000L
 private const val RING_EVERY_MS = 1_500L
 
 /**
- * Les minuteurs. Ils survivent à un redémarrage de l'application, sonnent même hors du kiosque,
- * et se taisent seuls après deux minutes.
+ * The timers. They survive an app restart, ring even outside the kiosk, and stop on their own after two
+ * minutes.
  */
 object TimerCenter {
     class Timer(val id: Int, val label: String?, val endsAt: Long)
@@ -29,11 +29,11 @@ object TimerCenter {
     private var ringingSince = 0L
     private var tone: ToneGenerator? = null
 
-    /** Les minuteurs terminés qui sonnent encore. */
+    /** Finished timers that are still ringing. */
     @Volatile var ringing = emptyList<Timer>()
         private set
 
-    /** Appelé sur le fil principal à chaque changement. */
+    /** Called on the main thread at every change. */
     @Volatile var onChange: (() -> Unit)? = null
 
     private val prefs get() = context.getSharedPreferences("timers", Context.MODE_PRIVATE)
@@ -64,14 +64,14 @@ object TimerCenter {
         prefs.edit().putInt("next", id + 1).apply()
         val timer = Timer(id, label, System.currentTimeMillis() + durationMillis)
         store(timers + timer)
-        Log.i(TAG, "minuteur $id lancé pour ${durationMillis / 1000} s")
+        Log.i(TAG, "timer $id started for ${durationMillis / 1000} s")
         main.removeCallbacks(tick)
         main.post(tick)
         changed()
         return timer
     }
 
-    /** [id] nul : tous, y compris ceux qui sonnent. */
+    /** [id] null: all of them, including those ringing. */
     @Synchronized
     fun cancel(id: Int?): Int {
         val kept = timers.filter { id != null && it.id != id }
@@ -103,12 +103,12 @@ object TimerCenter {
                 val (over, left) = timers.partition { it.endsAt <= now }
                 if (over.isNotEmpty()) {
                     store(left)
-                    // Un minuteur fini depuis longtemps (appareil éteint) ne sonne plus.
+                    // A timer that ended long ago (device off) no longer rings.
                     val fresh = over.filter { now - it.endsAt < RING_LIMIT_MS }
                     if (fresh.isNotEmpty()) {
                         ringing = ringing + fresh
                         ringingSince = now
-                        Log.i(TAG, "minuteur terminé")
+                        Log.i(TAG, "timer done")
                     }
                     changed()
                 }
@@ -125,7 +125,7 @@ object TimerCenter {
 
     private fun beep() {
         val generator = tone ?: try {
-            // Le canal des alarmes : audible même quand les médias sont à zéro.
+            // The alarm channel: audible even when media volume is at zero.
             ToneGenerator(AudioManager.STREAM_ALARM, 90).also { tone = it }
         } catch (e: RuntimeException) {
             return

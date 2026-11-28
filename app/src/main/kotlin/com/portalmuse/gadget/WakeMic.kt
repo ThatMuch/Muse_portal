@@ -5,15 +5,15 @@ import com.portalmuse.core.PreRoll
 import com.portalmuse.core.Upsampler
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** 40 ms à 16 kHz, soit un morceau d'appel une fois passé à 24 kHz. */
+/** 40 ms at 16 kHz, that is one call chunk once converted to 24 kHz. */
 private const val INPUT_BYTES = 640 * 2
-/** Au plus 15 s gardées pendant la connexion. */
+/** At most 15 s kept during connection. */
 private const val KEPT_FRAMES = 15_000 / 40
 
 /**
- * Le micro de l'écoute, resté ouvert après « Hey Muse » : l'appel reprend la capture sans coupure,
- * y compris ce qui est dit pendant la connexion. Le son reste en mémoire et ne part que si l'appel
- * s'ouvre ; [close] l'oublie et libère le micro.
+ * The listening microphone, left open after "Hey Muse": the call takes over capture without a gap, including
+ * what is said while connecting. The sound stays in memory and only leaves if the call opens; [close] forgets
+ * it and releases the microphone.
  */
 class WakeMic(private val recorder: AudioRecord) : AutoCloseable {
     private val closed = AtomicBoolean()
@@ -32,7 +32,7 @@ class WakeMic(private val recorder: AudioRecord) : AutoCloseable {
 
     fun read(): ByteArray? = preRoll.read()
 
-    /** L'écart minimal entre deux morceaux pendant le rattrapage. */
+    /** The minimum gap between two chunks while catching up. */
     fun pace(millis: Long) {
         preRoll.minGapMillis = millis
     }
@@ -42,7 +42,7 @@ class WakeMic(private val recorder: AudioRecord) : AutoCloseable {
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
         preRoll.stop()
-        // L'arrêt débloque la lecture en cours ; le micro n'est libéré qu'ensuite.
+        // Stopping unblocks the ongoing read; the microphone is only released afterwards.
         runCatching { recorder.stop() }
         preRoll.join(1_000)
         recorder.release()

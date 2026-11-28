@@ -15,7 +15,7 @@ import com.portalmuse.core.Notice
 
 private const val MAX_NOTICES = 3
 
-/** Les bandeaux de Muse, en haut de l'écran, au-dessus de tout. Un toucher retire un bandeau. */
+/** Muse's banners, at the top of the screen, above everything. A touch removes a banner. */
 class Notices(private val activity: Activity, root: FrameLayout, private val onChange: () -> Unit) {
     private val column = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
@@ -25,22 +25,22 @@ class Notices(private val activity: Activity, root: FrameLayout, private val onC
     init {
         root.addView(
             column,
-            // Le haut de l'écran du Portal est occupé par la surcouche système.
+            // The top of the Portal's screen is taken by the system overlay.
             FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.TOP).apply { topMargin = dp(56) },
         )
     }
 
-    /** Un bandeau et son retrait automatique. */
+    /** A banner and its automatic removal. */
     private class Timed(val urgent: Boolean, val millis: Long, val expire: Runnable)
 
     private val cards get() = (0 until column.childCount).map { column.getChildAt(it) }
 
-    /** Un bandeau urgent attend d'être vu : l'écran doit s'éclairer. */
+    /** An urgent banner waits to be seen: the screen must light up. */
     val hasUrgent get() = cards.any { (it.tag as Timed).urgent }
 
     /**
-     * Les bandeaux attendent tant qu'une question est à l'écran, qu'ils ne doivent pas masquer, ou
-     * que la lumière est éteinte, où personne ne les verrait. Leur durée repart ensuite.
+     * Banners wait while a question is on screen, which they must not hide, or while the light is off, where
+     * nobody would see them. Their duration then starts over.
      */
     var held = false
         set(value) {
@@ -62,11 +62,11 @@ class Notices(private val activity: Activity, root: FrameLayout, private val onC
             background = GradientDrawable().apply {
                 cornerRadius = dp(24).toFloat()
                 setColor(Ui.SURFACE)
-                // Un liseré rouge pour ce qui presse.
+                // A red edge for what is urgent.
                 if (notice.urgent) setStroke(dp(2), color)
             }
             elevation = dp(8).toFloat()
-            // Une pastille de couleur, puis le titre ou le nom de Muse.
+            // A colored dot, then the title or Muse's name.
             val heading = SpannableString("●  " + (notice.title ?: Settings(activity).museName ?: "Muse"))
             heading.setSpan(ForegroundColorSpan(color), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             addView(Ui.label(activity, 18f, Ui.MUTED).apply { text = heading })

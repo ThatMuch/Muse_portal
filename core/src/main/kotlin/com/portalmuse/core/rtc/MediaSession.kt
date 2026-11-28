@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/rtc/media.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/rtc/media.py
 package com.portalmuse.core.rtc
 
 import java.io.DataInputStream
@@ -26,15 +26,15 @@ private const val CHECK_INTERVAL_MS = 200L
 private const val CONSENT_INTERVAL_MS = 4_000L
 private const val CONSENT_TIMEOUT_MS = 30_000L
 private const val RESPONSE_WINDOW_MS = 5_000L
-/** 20 ms à 48 kHz. */
+/** 20 ms at 48 kHz. */
 private const val OPUS_FRAME_SAMPLES = 960
 
-/** Ce que le média livre, depuis les fils de réception. */
+/** What the media delivers, from the receiving threads. */
 interface MediaListener {
-    /** Un paquet Opus de Muse, dans l'ordre. */
+    /** An Opus packet from Muse, in order. */
     fun audio(opus: ByteArray)
 
-    /** Une image H.264 complète au format « Annexe B ». */
+    /** A complete H.264 picture in "Annex B" format. */
     fun video(unit: ByteArray)
 }
 
@@ -46,8 +46,8 @@ class MediaStats {
 }
 
 /**
- * Le média d'un appel : vérifications ICE-lite en UDP et en TCP (RFC 4571) à la fois, le premier
- * chemin qui répond est gardé ; puis SRTP et RTP.
+ * The media of a call: ICE-lite checks over UDP and TCP (RFC 4571) at once, the first path to answer is kept;
+ * then SRTP and RTP.
  */
 class MediaSession(
     private val offer: JoinSecrets,
@@ -55,7 +55,7 @@ class MediaSession(
     private val host: String,
     private val port: Int,
     private val listener: MediaListener,
-    /** Les adresses vers lesquelles on accepte d'envoyer. */
+    /** The addresses we accept to send to. */
     private val permitted: (InetAddress) -> Boolean,
     private val udp: Boolean = true,
     private val tcp: Boolean = true,
@@ -81,7 +81,7 @@ class MediaSession(
     private var lastKeyframeRequest = 0L
     private var lastConsent = 0L
 
-    /** Quand le dernier paquet de Muse est arrivé. */
+    /** When the last packet from Muse arrived. */
     @Volatile var lastMediaAt = 0L
         private set
 
@@ -90,7 +90,7 @@ class MediaSession(
 
     private fun now() = System.nanoTime() / 1_000_000
 
-    /** Bloque jusqu'à un chemin ouvert ; lève [IOException] sinon. Renvoie « udp » ou « tcp ». */
+    /** Blocks until a path is open; throws [IOException] otherwise. Returns "udp" or "tcp". */
     fun connect(timeoutMillis: Long): String {
         val named = listOf(answer.ipv4, answer.ipv6).filter { it.isNotEmpty() } + host
         val addresses = named.flatMap { name ->
@@ -100,7 +100,7 @@ class MediaSession(
                 emptyList()
             }
         }.distinct().filter(permitted).take(8)
-        if (addresses.isEmpty()) throw IOException("aucune adresse utilisable pour le média")
+        if (addresses.isEmpty()) throw IOException("no usable address for the media")
         for (address in addresses) {
             val target = InetSocketAddress(address, port)
             if (udp) openUdp(target)
@@ -114,14 +114,14 @@ class MediaSession(
         val winner = selected
         if (winner == null) {
             close()
-            throw IOException("aucune connexion au média")
+            throw IOException("no media connection")
         }
         for (path in paths) if (path !== winner) path.close()
         paths.retainAll(listOf(winner))
         stats.transport = winner.kind
         lastMediaAt = now()
         synchronized(lock) { lastConsent = now() }
-        // Les vérifications en course ne faisaient que tester ; on désigne le gagnant.
+        // The checks in flight were only testing; the winner is nominated.
         check(winner, nominate = true)
         thread(name = "media-consent", isDaemon = true) { keepConsent() }
         requestKeyframe()
@@ -146,7 +146,7 @@ class MediaSession(
                     try {
                         socket.receive(packet)
                     } catch (e: IOException) {
-                        // Un port injoignable remonte ici ; les autres chemins continuent.
+                        // An unreachable port surfaces here; the other paths carry on.
                         if (socket.isClosed || selected != null) break else continue
                     }
                     receive(path, buffer.copyOf(packet.length))
@@ -233,8 +233,8 @@ class MediaSession(
             return
         }
         if (path !== selected || data.size < 12 || Rtp.isRtcp(data)) return
-        // Seulement les deux flux du serveur : cela écarte aussi nos paquets renvoyés, chiffrés
-        // avec la même clé.
+        // Only the server's two streams: this also discards our own packets sent back, encrypted with the same
+        // key.
         val ssrc = ByteBuffer.wrap(data).getInt(8)
         if (ssrc != SERVER_AUDIO_SSRC && ssrc != SERVER_VIDEO_SSRC) return
         val packet = try {
@@ -249,7 +249,7 @@ class MediaSession(
         lastMediaAt = now()
         when (packet.payloadType) {
             OPUS_PAYLOAD -> {
-                // En UDP un paquet peut arriver après un plus récent : on le laisse tomber.
+                // Over UDP a packet may arrive after a newer one: drop it.
                 val previous = audioSequence
                 if (previous != null && (packet.sequence - previous) and 0xFFFF >= 0x8000) return
                 audioSequence = packet.sequence
@@ -276,7 +276,7 @@ class MediaSession(
         selected?.send?.invoke(srtp.protectRtcp(Rtp.pictureLoss(CLIENT_VIDEO_SSRC, SERVER_VIDEO_SSRC)))
     }
 
-    /** Un paquet Opus de 20 ms. */
+    /** A 20 ms Opus packet. */
     @Synchronized
     fun sendAudio(opus: ByteArray) {
         val path = selected ?: return

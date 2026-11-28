@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Télécharge les trois dépendances du détecteur « Hey Muse » (les mêmes versions et empreintes
-# que muse-gadget-sdk/linux/wakeword/build.sh), les vérifie puis les décompresse dans
-# third_party/wakeword/. À lancer une fois avant la première compilation.
+# Downloads the three dependencies of the "Hey Muse" detector (same versions and checksums as
+# muse-gadget-sdk/linux/wakeword/build.sh), verifies them and unpacks them into
+# third_party/wakeword/. Run once before the first build.
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 DEST="$ROOT/third_party/wakeword"
 REGISTRY="https://components-file.espressif.com/components"
-# composant|version|archive|sha256
+# component|version|archive|sha256
 ARCHIVES=(
   "pytorch/executorch|1.6.0-dev.20261112|pytorch__executorch-v1.6.0-dev.20261112.zip|7885747a7a47fe81b72f52b52884c122439a3304b117d0774dc05af3e03ba312"
   "espressif/esp-nn|1.5.0|espressif__esp-nn-v1.5.0.zip|50bdc2b89b54c1fae5d308a5961bb7a261453bbcc4e384ff1c696dea7514e1ce"
@@ -17,17 +17,17 @@ for entry in "${ARCHIVES[@]}"; do
   IFS='|' read -r name version file sha <<<"$entry"
   archive="$DEST/archives/$file"
   if [[ ! -f $archive ]]; then
-    echo "Téléchargement de $file"
+    echo "Downloading $file"
     curl -fsSL --retry 3 --proto '=https' -o "$archive.part" "$REGISTRY/$name/$version/$file"
     mv -- "$archive.part" "$archive"
   fi
   actual=$(shasum -a 256 -- "$archive" | awk '{print $1}')
   if [[ $actual != "$sha" ]]; then
     rm -f -- "$archive"
-    echo "Empreinte inattendue pour $file : $actual" >&2
+    echo "Unexpected checksum for $file: $actual" >&2
     exit 1
   fi
-  echo "Empreinte vérifiée : $file ($(wc -c <"$archive" | tr -d ' ') octets)"
+  echo "Checksum verified: $file ($(wc -c <"$archive" | tr -d ' ') bytes)"
   target="$DEST/${name#*/}"
   rm -rf -- "$target"
   mkdir -p "$target"

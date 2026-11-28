@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/voice_gate.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/voice_gate.py
 package com.portalmuse.core
 
 import org.json.JSONObject
@@ -10,9 +10,9 @@ internal fun identifier(value: Any?): String? =
     (value as? String)?.takeIf { it.isNotEmpty() && '\u0000' !in it && it.toByteArray().size <= MAX_IDS }
 
 /**
- * Écarte le son d'une réponse interrompue. Les identifiants de flux du fournisseur désignent le son
- * périmé ; la réponse au tour de parole confirmé de l'appelant est admise, avec ses suites.
- * Le texte transcrit suit le son de la même réponse.
+ * Drops the sound of an interrupted reply. The provider's stream identifiers name the stale sound; the reply to
+ * the caller's confirmed turn is admitted, with what follows it. Transcript text follows the sound of the same
+ * reply.
  */
 class ReplyGate {
     enum class Verdict { DROP, HOLD, PLAY }
@@ -37,7 +37,7 @@ class ReplyGate {
     var openResponse: String? = null
         private set
 
-    /** Flux entendus pour la première fois depuis le dernier `response.created`. */
+    /** Streams heard for the first time since the last `response.created`. */
     var wordsIds: MutableList<String> = ArrayList()
         private set
 
@@ -70,9 +70,9 @@ class ReplyGate {
             "input_audio_buffer.speech_started" -> {
                 val heard = identifier(event.opt("item_id"))
                 if (heard != null) {
-                    // Un début de parole rejoué ne doit pas rechoisir un ancien tour.
+                    // A replayed start of speech must not pick an old turn again.
                     if (heard in items) return
-                    check(items.size < MAX_IDS) { "trop de tours de parole" }
+                    check(items.size < MAX_IDS) { "too many speech turns" }
                     items.add(heard)
                 }
                 interrupt(heard)
@@ -123,7 +123,7 @@ class ReplyGate {
         val id = if (event.opt("type") == "continuous_audio_video.delta") identifier(event.opt("response_id")) else null
         if (id == null) return if (fenced) Verdict.DROP else Verdict.PLAY
         ids[id]?.let { return verdict(it) }
-        check(ids.size < MAX_IDS) { "trop de réponses dans l'appel" }
+        check(ids.size < MAX_IDS) { "too many replies in the call" }
         val state = when {
             !fenced -> State.PLAYING
             item == null || blocked -> State.STALE

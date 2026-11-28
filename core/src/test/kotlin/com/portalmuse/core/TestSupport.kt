@@ -58,7 +58,7 @@ fun clientFinishedRecord(v: JSONObject): JSONObject = JSONObject()
     .put("ciphertext", v.getString("client_finished_ciphertext"))
     .put("tag", v.getString("client_finished_tag"))
 
-/** Côté téléphone de la couche d'enregistrements, écrit d'après le contrat et non le code testé. */
+/** Phone side of the record layer, written from the contract and not from the tested code. */
 class Mobile(private val v: JSONObject) {
     var txCounter = 0L
 

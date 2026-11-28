@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/rtc/rtp.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/rtc/rtp.py
 package com.portalmuse.core.rtc
 
 import java.io.ByteArrayOutputStream
@@ -17,16 +17,16 @@ object Rtp {
     fun isRtcp(data: ByteArray) = data.size >= 8 && (data[1].toInt() and 0xFF) in 192..223
 
     fun parse(data: ByteArray): RtpPacket {
-        require(data.size >= 12 && (data[0].toInt() and 0xFF) shr 6 == 2) { "pas un paquet RTP" }
+        require(data.size >= 12 && (data[0].toInt() and 0xFF) shr 6 == 2) { "not an RTP packet" }
         val buffer = ByteBuffer.wrap(data)
         var offset = 12 + 4 * (data[0].toInt() and 0x0F)
         if (data[0].toInt() and 0x10 != 0) {
-            require(offset + 4 <= data.size) { "longueurs RTP invalides" }
+            require(offset + 4 <= data.size) { "invalid RTP lengths" }
             offset += 4 + 4 * (buffer.getShort(offset + 2).toInt() and 0xFFFF)
         }
         var end = data.size
         if (data[0].toInt() and 0x20 != 0) end -= data[data.size - 1].toInt() and 0xFF
-        require(offset <= end) { "longueurs RTP invalides" }
+        require(offset <= end) { "invalid RTP lengths" }
         return RtpPacket(
             data[1].toInt() and 0x7F, data[1].toInt() and 0x80 != 0, buffer.getShort(2).toInt() and 0xFFFF,
             buffer.getInt(4).toLong() and 0xFFFFFFFFL, buffer.getInt(8), data.copyOfRange(offset, end),
@@ -37,14 +37,14 @@ object Rtp {
         ByteBuffer.allocate(12 + payload.size).put(0x80.toByte()).put(payloadType.toByte())
             .putShort(sequence.toShort()).putInt(timestamp.toInt()).putInt(ssrc).put(payload).array()
 
-    /** Demande une image clé. */
+    /** Asks for a key frame. */
     fun pictureLoss(senderSsrc: Int, mediaSsrc: Int): ByteArray = ByteBuffer.allocate(12)
         .put(0x81.toByte()).put(206.toByte()).putShort(2).putInt(senderSsrc).putInt(mediaSsrc).array()
 }
 
 /**
- * Réassemble le H.264 reçu en RTP en unités « Annexe B » ; une perte ou un dépassement jette
- * l'unité, et plus rien ne sort avant la prochaine image clé.
+ * Reassembles H.264 received over RTP into "Annex B" units; a loss or an overflow drops the unit, and nothing
+ * more comes out before the next key frame.
  */
 class H264Depacketizer {
     private val units = ArrayList<ByteArray>()
@@ -64,7 +64,7 @@ class H264Depacketizer {
             if (bytes > MAX_UNIT_BYTES || units.size > MAX_UNIT_NALS) drop()
         }
         if (!packet.marker) return null
-        if (fragment != null) drop() // un fragment resté inachevé à la fin de l'image
+        if (fragment != null) drop() // a fragment left unfinished at the end of the picture
         val complete = units.toList()
         val wasBroken = broken
         units.clear()
@@ -95,7 +95,7 @@ class H264Depacketizer {
         bytes += payload.size
         when (val kind = payload[0].toInt() and 0x1F) {
             in 1..23 -> units.add(payload)
-            24 -> { // STAP-A : plusieurs unités dans un paquet
+            24 -> { // STAP-A: several units in one packet
                 var offset = 1
                 while (offset + 2 <= payload.size) {
                     val size = ((payload[offset].toInt() and 0xFF) shl 8) or (payload[offset + 1].toInt() and 0xFF)
@@ -104,7 +104,7 @@ class H264Depacketizer {
                     offset += size
                 }
             }
-            28 -> if (payload.size >= 2) { // FU-A : une unité en fragments
+            28 -> if (payload.size >= 2) { // FU-A: one unit in fragments
                 val start = payload[1].toInt() and 0x80 != 0
                 val end = payload[1].toInt() and 0x40 != 0
                 if (start) {
@@ -112,7 +112,7 @@ class H264Depacketizer {
                         write((payload[0].toInt() and 0xE0) or (payload[1].toInt() and 0x1F))
                     }
                 }
-                val open = fragment ?: return drop() // un fragment sans son début
+                val open = fragment ?: return drop() // a fragment without its start
                 open.write(payload, 2, payload.size - 2)
                 if (end) {
                     units.add(open.toByteArray())

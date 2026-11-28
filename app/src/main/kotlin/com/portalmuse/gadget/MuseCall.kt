@@ -22,30 +22,30 @@ import kotlin.concurrent.thread
 private const val TAG = "PortalMuse"
 private const val TRANSPORT_TIMEOUT_S = 35L
 private const val WAKE_FIRST_TURN_MS = 15_000L
-/** En vidéo on attend la première réponse, faute de savoir ce que Muse a entendu. */
+/** In video we wait for the first answer, for lack of knowing what Muse heard. */
 private const val WAKE_VIDEO_FIRST_MS = 20_000L
-/** Sans échange pendant ce temps, l'appel se raccroche seul. */
+/** Without any exchange during this time, the call hangs up on its own. */
 private const val IDLE_HANG_UP_MS = 30_000L
 
 /**
- * Un appel, vocal ou vidéo : une connexion Muse à part, réservée à l'appel (la session permanente
- * reste en place), puis l'appel lui-même.
+ * A voice or video call: a separate Muse connection reserved for the call (the permanent session stays), then
+ * the call itself.
  */
 class MuseCall(
     private val context: Context,
     /**
-     * Appel ouvert par « Hey Muse » : son micro, qui capte depuis le mot. L'appel le ferme, et se
-     * clôt si aucune demande n'arrive.
+     * Call opened by "Hey Muse": its microphone, capturing since the wake word. The call closes it, and ends if
+     * no request arrives.
      */
     private val wakeMic: WakeMic?,
-    /** Appel vidéo : où afficher les images de Muse ; `null` pour un appel vocal. */
+    /** Video call: where to show Muse's pictures; `null` for a voice call. */
     private val video: VideoScreen? = null,
     private val onEvent: (CallEvent) -> Unit,
     private val onEnd: (Outcome) -> Unit,
 ) {
     sealed class Outcome {
         class Finished(val result: CallResult) : Outcome()
-        /** La connexion vocale n'a pas pu s'ouvrir. */
+        /** The voice connection could not be opened. */
         class Unreachable(val status: Int?) : Outcome()
         object NoAudio : Outcome()
     }
@@ -73,25 +73,25 @@ class MuseCall(
             } catch (e: UpgradeRejected) {
                 Outcome.Unreachable(e.status)
             } catch (e: IOException) {
-                Log.w(TAG, "appel : ${e.message}")
+                Log.w(TAG, "call: ${e.message}")
                 Outcome.Unreachable(null)
             } catch (e: IllegalStateException) {
-                Log.w(TAG, "appel : audio indisponible (${e.javaClass.simpleName})")
+                Log.w(TAG, "call: audio unavailable (${e.javaClass.simpleName})")
                 Outcome.NoAudio
             } catch (e: RuntimeException) {
-                // Le type seulement : un message pourrait contenir un jeton.
-                Log.e(TAG, "appel en échec : ${e.javaClass.simpleName}")
+                // The type only: a message could contain a token.
+                Log.e(TAG, "call failed: ${e.javaClass.simpleName}")
                 Outcome.Unreachable(null)
             }
             wakeMic?.close()
-            Log.i(TAG, "appel terminé : ${describe(outcome)}")
+            Log.i(TAG, "call ended: ${describe(outcome)}")
             onEnd(outcome)
         }
     }
 
     private fun run(): Outcome {
         val pairing = SecretStore(context).pairing ?: return Outcome.Unreachable(null)
-        val log: (String) -> Unit = { Log.i(TAG, "appel : $it") }
+        val log: (String) -> Unit = { Log.i(TAG, "call: $it") }
         val lookup = MuseHttp.api(context).fetchVms(pairing.accessToken, pairing.apiUrlV2, log)
         val vm = lookup.vms.firstOrNull { it.isDefault } ?: lookup.vms.firstOrNull()
             ?: return Outcome.Unreachable(lookup.status)
@@ -156,7 +156,7 @@ class MuseCall(
 
     private fun describe(outcome: Outcome) = when (outcome) {
         is Outcome.Finished -> outcome.result.toString()
-        is Outcome.Unreachable -> "connexion impossible${outcome.status?.let { " HTTP $it" } ?: ""}"
-        Outcome.NoAudio -> "audio indisponible"
+        is Outcome.Unreachable -> "connection failed${outcome.status?.let { " HTTP $it" } ?: ""}"
+        Outcome.NoAudio -> "audio unavailable"
     }
 }

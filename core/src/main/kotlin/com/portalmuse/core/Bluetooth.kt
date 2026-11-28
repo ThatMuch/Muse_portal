@@ -1,11 +1,11 @@
-// Les commandes ble.* reprennent les noms et les formes de muse-gadget-sdk (Copyright (c) Meta
-// Platforms, Inc. and affiliates, Apache-2.0). Source : esp32/main/ble_commands.c
+// The ble.* commands take their names and shapes from muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and
+// affiliates, Apache-2.0). Source: esp32/main/ble_commands.c
 package com.portalmuse.core
 
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Un appareil vu pendant une recherche. */
+/** A device seen during a scan. */
 data class BleDevice(
     val address: String, val rssi: Int, val name: String?, val connectable: Boolean,
     val services: List<String> = emptyList(), val manufacturerData: ByteArray? = null,
@@ -15,22 +15,22 @@ data class BleCharacteristic(val service: String, val uuid: String, val handle: 
 
 data class BleConnection(val conn: Int, val address: String, val mtu: Int)
 
-/** La caractéristique visée : par [handle], ou par [uuid] (et [service] s'il y en a plusieurs). */
+/** The targeted characteristic: by [handle], or by [uuid] (and [service] if there are several). */
 data class BleTarget(val handle: Int?, val uuid: String?, val service: String?)
 
 class BleValue(val handle: Int, val data: ByteArray)
 
 class BleNotification(val millis: Long, val data: ByteArray)
 
-/** Un échec à dire à Muse : un code court et une phrase, en anglais. */
+/** A failure to report to Muse: a short code and a sentence, in English. */
 class BleError(val code: String, message: String) : Exception(message)
 
-/** La radio de l'appareil. Tous les appels bloquent et lèvent [BleError]. */
+/** The device's radio. All calls block and throw [BleError]. */
 interface BleRadio {
-    /** `null` si tout est prêt, sinon pourquoi le Bluetooth est inutilisable. */
+    /** `null` if everything is ready, otherwise why Bluetooth cannot be used. */
     fun problem(): String?
     fun scan(durationMillis: Long, active: Boolean, name: String?, limit: Int): List<BleDevice>
-    /** Le nom connu d'une adresse, s'il y en a un. */
+    /** The known name of an address, if there is one. */
     fun nameOf(address: String): String?
     fun connect(address: String, timeoutMillis: Long): BleConnection
     fun connections(): List<BleConnection>
@@ -41,15 +41,15 @@ interface BleRadio {
     fun subscribe(conn: Int, target: BleTarget, durationMillis: Long): List<BleNotification>
 }
 
-/** Les appareils que le propriétaire a acceptés, une fois pour toutes. */
+/** The devices the owner has accepted, once and for all. */
 interface ApprovedDevices {
     fun contains(address: String): Boolean
     fun add(address: String, name: String?)
 }
 
 /**
- * Le Bluetooth du Portal, vu par Muse. Chercher est permis dès que le propriétaire a activé la
- * fonction ; se connecter à un nouvel appareil demande son accord à l'écran.
+ * The Portal's Bluetooth, as seen by Muse. Scanning is allowed once the owner has turned the feature on;
+ * connecting to a new device asks for approval on screen.
  */
 class BluetoothCommands(
     private val radio: BleRadio,
@@ -195,14 +195,21 @@ class BluetoothCommands(
         if (!ADDRESS.matches(address)) invalid("address must look like AA:BB:CC:DD:EE:FF")
         val timeout = number(params, "timeout_ms", 1_000..30_000, 10_000).toLong()
         if (!approved.contains(address)) {
-            // Le nom vient de l'appareil lui-même : on montre toujours l'adresse avec.
+            // The name comes from the device itself: the address is always shown with it.
             val name = radio.nameOf(address)?.filterNot { it.isISOControl() }?.take(40)
             val answer = askOwner(
                 Question(
-                    "Autoriser la connexion à cet objet Bluetooth ?",
-                    "${name ?: "Sans nom"}\n$address\n\nUne fois autorisé, Muse pourra le lire et le commander " +
-                        "sans redemander.",
-                    "Autoriser", "Refuser", APPROVAL_MS,
+                    tr(
+                        "Allow connecting to this Bluetooth device?",
+                        "Autoriser la connexion à cet objet Bluetooth ?",
+                    ),
+                    tr(
+                        "${name ?: "No name"}\n$address\n\nOnce allowed, Muse can read and control it " +
+                            "without asking again.",
+                        "${name ?: "Sans nom"}\n$address\n\nUne fois autorisé, Muse pourra le lire et le commander " +
+                            "sans redemander.",
+                    ),
+                    tr("Allow", "Autoriser"), tr("Reject", "Refuser"), APPROVAL_MS,
                 ),
             )
             if (answer != AskResult.APPROVED) {

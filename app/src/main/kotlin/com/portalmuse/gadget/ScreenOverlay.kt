@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Bitmap
@@ -24,8 +25,8 @@ import kotlin.math.abs
 private const val SLIDE_MS = 8_000L
 
 /**
- * Ce que Muse montre : des images en diaporama (toucher à gauche ou à droite, ou glisser), ou une
- * page. Toujours refermable d'un toucher sur « Fermer ».
+ * What Muse shows: pictures as a slideshow (touch left or right, or swipe), or a page. Can always be closed
+ * with a touch on "Close".
  */
 class ScreenOverlay(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
@@ -67,7 +68,10 @@ class ScreenOverlay(private val activity: Activity, root: FrameLayout, private v
         addView(caption, placed(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         addView(counter, placed(Gravity.BOTTOM or Gravity.END))
         addView(
-            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, "Fermer").apply { setOnClickListener { close() } },
+            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, tr(
+                "Close",
+                "Fermer",
+            )).apply { setOnClickListener { close() } },
             FrameLayout.LayoutParams(dp(64), dp(64), Gravity.TOP or Gravity.END).apply {
                 setMargins(dp(24), dp(24), dp(24), 0)
             },
@@ -80,7 +84,7 @@ class ScreenOverlay(private val activity: Activity, root: FrameLayout, private v
 
     val isOpen get() = panel.visibility == View.VISIBLE
 
-    /** Laisse voir les boutons d'un appel ou d'une conversation en cours, en bas. */
+    /** Keeps the buttons of an ongoing call or conversation visible at the bottom. */
     var bottomRoom = false
         set(value) {
             field = value
@@ -104,7 +108,7 @@ class ScreenOverlay(private val activity: Activity, root: FrameLayout, private v
         reset()
         val web = WebView(activity).apply {
             setBackgroundColor(Color.BLACK)
-            // Une page écrite à distance : ni script, ni réseau, ni fichiers, ni navigation.
+            // A page written remotely: no script, network, files or navigation.
             settings.javaScriptEnabled = false
             settings.blockNetworkLoads = true
             settings.allowFileAccess = false

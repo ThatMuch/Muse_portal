@@ -12,7 +12,7 @@ private const val BITRATE = 32_000
 private const val FRAME_US = 20_000L
 private const val PRE_SKIP = 312
 
-/** L'encodeur et le décodeur Opus d'Android. L'encodeur sert à un fil, le décodeur à un autre. */
+/** Android's Opus encoder and decoder. The encoder serves one thread, the decoder another. */
 class OpusCodec : AutoCloseable {
     private val encoder: MediaCodec
     private val decoder: MediaCodec
@@ -27,7 +27,7 @@ class OpusCodec : AutoCloseable {
         encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
         encoder.configure(encoding, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
         encoder.start()
-        // Le décodeur d'Android attend l'en-tête Opus et deux durées en nanosecondes.
+        // Android's decoder expects the Opus header and two durations in nanoseconds.
         val head = ByteBuffer.allocate(19).order(ByteOrder.LITTLE_ENDIAN).put("OpusHead".toByteArray())
             .put(1).put(1).putShort(PRE_SKIP.toShort()).putInt(RATE).putShort(0).put(0)
         fun nanoseconds(value: Long) = ByteBuffer.allocate(8).order(ByteOrder.nativeOrder()).putLong(value)
@@ -41,7 +41,7 @@ class OpusCodec : AutoCloseable {
         decoder.start()
     }
 
-    /** 20 ms de PCM 48 kHz mono ; zéro, un ou plusieurs paquets. */
+    /** 20 ms of 48 kHz mono PCM; zero, one or several packets. */
     fun encode(pcm: ByteArray): List<ByteArray> {
         sentUs += FRAME_US
         return pass(encoder, pcm, sentUs)
@@ -54,7 +54,7 @@ class OpusCodec : AutoCloseable {
         return out.toByteArray()
     }
 
-    /** Donne une entrée au codec et ramasse ce qui est prêt, sans attendre plus de quelques ms. */
+    /** Feeds the codec and collects what is ready, without waiting more than a few ms. */
     private fun pass(codec: MediaCodec, input: ByteArray, timeUs: Long): List<ByteArray> {
         val index = codec.dequeueInputBuffer(10_000)
         if (index >= 0) {

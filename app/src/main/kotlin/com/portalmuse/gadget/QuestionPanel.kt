@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.app.Activity
 import android.graphics.Typeface
 import android.os.Handler
@@ -17,10 +18,10 @@ import android.widget.Toast
 import com.portalmuse.core.AskResult
 import com.portalmuse.core.Question
 
-/** Le temps de lire avant que les boutons réagissent : un doigt déjà en route ne répond pas. */
+/** Time to read before the buttons react: a finger already on its way does not answer. */
 private const val ARMING_MS = 1_200L
 
-/** Une demande de validation : la question, et deux grands boutons. */
+/** An approval request: the question and two large buttons. */
 class QuestionPanel(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
     private var reply: ((AskResult) -> Unit)? = null
@@ -41,7 +42,7 @@ class QuestionPanel(private val activity: Activity, root: FrameLayout, private v
         override fun run() {
             val left = (expiresAt - SystemClock.elapsedRealtime() + 999) / 1000
             if (left <= 0) return answer(AskResult.NO_ANSWER)
-            remaining.text = "Expire dans %d:%02d".format(left / 60, left % 60)
+            remaining.text = tr("Expires in %d:%02d", "Expire dans %d:%02d").format(left / 60, left % 60)
             main.postDelayed(this, 1_000)
         }
     }
@@ -79,7 +80,10 @@ class QuestionPanel(private val activity: Activity, root: FrameLayout, private v
     fun ask(asked: Question, onAnswer: (AskResult) -> Unit): Boolean {
         if (reply != null) return false
         reply = onAnswer
-        from.text = "${Settings(activity).museName ?: "Muse"} demande votre accord"
+        from.text = tr(
+            "${Settings(activity).museName ?: "Muse"} asks for your approval",
+            "${Settings(activity).museName ?: "Muse"} demande votre accord",
+        )
         question.text = asked.question
         details.text = Ui.formatted(asked.details.orEmpty())
         reject.text = asked.rejectLabel
@@ -94,7 +98,7 @@ class QuestionPanel(private val activity: Activity, root: FrameLayout, private v
         return true
     }
 
-    /** La question disparaît sans réponse. */
+    /** The question disappears without an answer. */
     fun cancel() {
         if (reply != null) answer(AskResult.NO_ANSWER)
     }
@@ -107,9 +111,9 @@ class QuestionPanel(private val activity: Activity, root: FrameLayout, private v
         panel.visibility = View.GONE
         waiting(result)
         val said = when (result) {
-            AskResult.APPROVED -> "Réponse envoyée : ${approve.text}"
-            AskResult.REJECTED -> "Réponse envoyée : ${reject.text}"
-            else -> "Demande restée sans réponse"
+            AskResult.APPROVED -> tr("Answer sent: ${approve.text}", "Réponse envoyée : ${approve.text}")
+            AskResult.REJECTED -> tr("Answer sent: ${reject.text}", "Réponse envoyée : ${reject.text}")
+            else -> tr("Request left unanswered", "Demande restée sans réponse")
         }
         Toast.makeText(activity, said, Toast.LENGTH_SHORT).show()
         onVisibility()

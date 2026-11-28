@@ -1,9 +1,9 @@
-"""Génère les vecteurs média à partir du code du SDK (join.py, stun.py).
+"""Generates the media vectors from the SDK code (join.py, stun.py).
 
-usage : python3 -I rtc_vectors.py /chemin/vers/muse-gadget-sdk > ../resources/rtc_sdk.json
+usage: python3 -I rtc_vectors.py /path/to/muse-gadget-sdk > ../resources/rtc_sdk.json
 
-Les valeurs tirées au sort sont figées. Le paquet « cryptography », utilisé seulement pour
-l'identité DTLS remplacée ici, n'est pas nécessaire.
+Random values are fixed. The "cryptography" package, only used for the DTLS identity replaced
+here, is not needed.
 """
 import hashlib
 import hmac

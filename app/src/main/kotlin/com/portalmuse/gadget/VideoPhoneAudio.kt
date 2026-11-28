@@ -14,16 +14,16 @@ import com.portalmuse.core.VideoAudio
 
 private const val RATE = 48_000
 private const val FRAME_BYTES = 960 * 2 // 20 ms
-/** Après « Hey Muse », le son gardé est rattrapé trois fois plus vite, comme dans le client Linux. */
+/** After "Hey Muse", the buffered sound is caught up three times faster, as in the Linux client. */
 private const val WAKE_GAP_MS = 13L
 private const val HALF_GAP_MS = 6L
-/** La capture se fait comme pour l'appel vocal, puis passe à 48 kHz, comme le client Linux. */
+/** Capture works as for the voice call, then goes to 48 kHz, like the Linux client. */
 private const val CAPTURE_RATE = 24_000
 private const val CAPTURE_BYTES = FRAME_BYTES / 2
 
 /**
- * Micro, haut-parleur et Opus d'un appel vidéo. L'autorisation du micro doit déjà être
- * accordée. Après « Hey Muse », la capture est celle de [wakeMic], déjà en cours.
+ * Microphone, speaker and Opus of a video call. The microphone permission must already be granted. After "Hey
+ * Muse", capture is the one of [wakeMic], already running.
  */
 @SuppressLint("MissingPermission")
 class VideoPhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : VideoAudio {
@@ -36,7 +36,7 @@ class VideoPhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : 
         .setAudioAttributes(speech)
         .build()
     private val recorder: AudioRecord?
-    /** La seconde moitié d'un morceau de 40 ms de [wakeMic]. */
+    /** The second half of a 40 ms chunk from [wakeMic]. */
     private var half: ByteArray? = null
     private val track: AudioTrack
     private val opus: OpusCodec
@@ -63,12 +63,12 @@ class VideoPhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : 
 
     private fun openRecorder(): AudioRecord {
         val minimum = AudioRecord.getMinBufferSize(CAPTURE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        check(minimum > 0) { "capture à 24 kHz indisponible" }
+        check(minimum > 0) { "24 kHz capture unavailable" }
         val opened = AudioRecord(
             MediaRecorder.AudioSource.VOICE_RECOGNITION, CAPTURE_RATE, AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum, FRAME_BYTES * 8),
         )
-        check(opened.state == AudioRecord.STATE_INITIALIZED) { "micro indisponible" }
+        check(opened.state == AudioRecord.STATE_INITIALIZED) { "microphone unavailable" }
         return opened
     }
 
@@ -90,7 +90,7 @@ class VideoPhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : 
         return frame.takeIf { capturing }
     }
 
-    /** Les morceaux de 40 ms de l'écoute, rendus par moitiés de 20 ms. */
+    /** The 40 ms chunks from listening, handed out as 20 ms halves. */
     private fun fromWake(): ByteArray? {
         half?.let {
             half = null
@@ -115,7 +115,7 @@ class VideoPhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : 
         wakeMic?.stop()
     }
 
-    /** Après la fin de l'appel seulement. */
+    /** Only after the end of the call. */
     fun release() {
         capturing = false
         runCatching { recorder?.stop() }

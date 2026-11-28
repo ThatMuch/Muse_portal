@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Sources : linux/src/musegadget/muse_turn.py, service.py (send_and_wait, _ReplyReader)
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Sources:
+// linux/src/musegadget/muse_turn.py, service.py (send_and_wait, _ReplyReader)
 package com.portalmuse.core
 
 import org.json.JSONArray
@@ -26,10 +26,10 @@ private const val MAX_SPEECH_BYTES = 8 * 1024 * 1024
 private const val SPEECH_TIMEOUT_MS = 180_000L
 
 object Wav {
-    /** Limite de Muse pour une note vocale. */
+    /** Muse's limit for a voice note. */
     const val MAX_BYTES = 2 * 1024 * 1024
 
-    /** PCM 16 bits mono petit-boutiste dans un conteneur WAV. */
+    /** 16 bit mono little-endian PCM in a WAV container. */
     fun encode(pcm: ByteArray, sampleRate: Int): ByteArray = ByteBuffer.allocate(44 + pcm.size)
         .order(ByteOrder.LITTLE_ENDIAN)
         .put("RIFF".toByteArray()).putInt(36 + pcm.size).put("WAVE".toByteArray())
@@ -41,55 +41,55 @@ object Wav {
 
 class ChatProgress(
     val text: String, val activity: String?,
-    /** Les messages déjà complets : on peut les lire sans attendre la fin de la demande. */
+    /** The messages already complete: they can be read without waiting for the end of the request. */
     val finished: List<String> = emptyList(),
 )
 
 enum class ChatFailure {
-    /** Le message n'est pas parti. */
+    /** The message was not sent. */
     NOT_SENT,
-    /** Parti ou non : on ne sait pas. */
+    /** Sent or not: unknown. */
     UNCERTAIN,
-    /** Muse l'a refusé. */
+    /** Muse refused it. */
     REFUSED,
-    /** Envoyé, mais aucune réponse n'a été lue. */
+    /** Sent, but no reply was read. */
     NO_REPLY,
 }
 
 sealed class ChatResult {
-    /** [partial] : la réponse était encore en cours quand l'attente a pris fin. */
+    /** [partial]: the reply was still in progress when waiting ended. */
     class Answer(
         val text: String, val partial: Boolean,
-        /** Les messages de la réponse, dans l'ordre : ce que [MuseChat.speech] sait lire. */
+        /** The messages of the reply, in order: what [MuseChat.speech] can read. */
         val messageIds: List<String> = emptyList(),
     ) : ChatResult()
     class Failed(val failure: ChatFailure, val status: Int? = null) : ChatResult()
 }
 
-/** Un message passé de la conversation. */
+/** A past message of the conversation. */
 data class PastMessage(val fromUser: Boolean, val text: String)
 
 sealed class History {
     class Messages(val messages: List<PastMessage>) : History()
-    /** [status] : le statut HTTP d'un refus, `null` si la réponse n'est pas arrivée ou est illisible. */
+    /** [status]: the HTTP status of a refusal, `null` if the answer did not arrive or cannot be read. */
     class Unavailable(val status: Int?) : History()
 }
 
-/** La conversation principale de l'utilisateur, la même que sur le téléphone. */
+/** The user's main conversation, the same as on the phone. */
 class MuseChat(
     private val streams: MuseStreams,
     private val deviceId: String,
     private val replyTimeoutMillis: Long = 180_000,
     private val requestTimeoutMillis: Long = 60_000,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
-    /** Des diagnostics sans contenu : noms d'événements, durées. */
+    /** Diagnostics without content: event names, durations. */
     private val log: (String) -> Unit = {},
-    /** Réponse écrite en entier et plus rien depuis ce temps : on n'attend plus la fin de la tâche. */
+    /** Reply written in full and nothing more for this long: stop waiting for the end of the task. */
     private val stalledReplyMillis: Long = 20_000,
-    /** Une conversation à part ; `null` pour la principale, celle du téléphone. */
+    /** A separate conversation; `null` for the main one, the phone's. */
     private val sideChat: String? = null,
 ) {
-    /** [spoken] demande une réponse que [speech] pourra lire à voix haute. */
+    /** [spoken] asks for a reply that [speech] can read aloud. */
     fun sendText(
         message: String, onProgress: (ChatProgress) -> Unit = {}, cancelled: () -> Boolean = { false },
         spoken: Boolean = false,
@@ -99,7 +99,7 @@ class MuseChat(
         wav: ByteArray, onProgress: (ChatProgress) -> Unit = {}, cancelled: () -> Boolean = { false },
         spoken: Boolean = false,
     ): ChatResult {
-        require(wav.isNotEmpty() && wav.size <= Wav.MAX_BYTES) { "note vocale vide ou de plus de 2 Mio" }
+        require(wav.isNotEmpty() && wav.size <= Wav.MAX_BYTES) { "voice note empty or over 2 MiB" }
         val voice = JSONObject()
             .put("type", "file")
             .put("mime_type", "audio/wav")
@@ -108,14 +108,14 @@ class MuseChat(
         return ask(JSONObject().put("message", "").put("items", JSONArray().put(voice)), spoken, onProgress, cancelled)
     }
 
-    /** Une photo JPEG, avec [message] pour dire quoi en faire. */
+    /** A JPEG photo, with [message] to say what to do with it. */
     fun sendImage(
         jpeg: ByteArray, message: String, onProgress: (ChatProgress) -> Unit = {},
         cancelled: () -> Boolean = { false }, spoken: Boolean = false,
     ): ChatResult {
-        require(jpeg.isNotEmpty() && jpeg.size <= MAX_IMAGE_BYTES) { "image vide ou de plus de 2 Mio" }
+        require(jpeg.isNotEmpty() && jpeg.size <= MAX_IMAGE_BYTES) { "picture empty or over 2 MiB" }
         val items = JSONArray()
-        // Muse ne lit que les éléments d'une demande qui en a : le texte part d'abord.
+        // Muse only reads the items of a request that has some: the text goes first.
         if (message.isNotBlank()) items.put(JSONObject().put("type", "text").put("text", message))
         items.put(
             JSONObject().put("type", "image").put("mime_type", "image/jpeg").put("filename", "photo.jpg")
@@ -125,13 +125,13 @@ class MuseChat(
     }
 
     /**
-     * La voix de Muse pour un message d'une réponse demandée à l'oral : du MP3, remis à [onAudio]
-     * au fil de son arrivée. Renvoie le statut HTTP, ou `null` si le son n'est pas arrivé entier.
+     * Muse's voice for a message of a reply requested as spoken: MP3, handed to [onAudio] as it arrives.
+     * Returns the HTTP status, or `null` if the sound did not arrive whole.
      */
     fun speech(messageId: String, onAudio: (ByteArray) -> Unit, cancelled: () -> Boolean = { false }): Int? {
         val id = java.net.URLEncoder.encode(messageId, "UTF-8").replace("+", "%20")
         return try {
-            // Certaines VM ne connaissent que l'ancien chemin.
+            // Some VMs only know the old path.
             speechFrom("/api/voice/tts-stream?message_id=$id", onAudio, cancelled)
                 .let { if (it == 404) speechFrom("/voice/tts-stream?message_id=$id", onAudio, cancelled) else it }
         } catch (e: IOException) {
@@ -158,7 +158,7 @@ class MuseChat(
         }
     }
 
-    /** Le nom que l'utilisateur a donné à son Muse, ou `null`. */
+    /** The name the user gave their Muse, or `null`. */
     fun museName(): String? = try {
         val (status, body) = request(ServiceType.GADGET, "GET", "/api/gadget/me", ByteArray(0))
         if (status !in 200..299) null
@@ -170,7 +170,7 @@ class MuseChat(
         null
     }
 
-    /** Les derniers messages, du plus ancien au plus récent. Toutes les VM n'offrent pas cet accès. */
+    /** The latest messages, oldest first. Not all VMs offer this access. */
     fun history(limit: Int = 12): History {
         require(limit in 1..50)
         return try {
@@ -179,10 +179,11 @@ class MuseChat(
             val events = JSONObject(body).optJSONObject("result")?.optJSONArray("chat_events")
                 ?: return History.Unavailable(null)
             val rows = (0 until events.length()).mapNotNull { events.optJSONObject(it) }
-            // Dans l'ordre des numéros quand la VM en donne.
+            // In sequence number order when the VM provides them.
             val ordered = if (rows.all { it.opt("seq") is Number }) rows.sortedBy { it.getLong("seq") } else rows
-            // Les noms des champs seulement, pour comprendre une réponse inattendue.
-            log("historique : ${rows.size} entrée(s), champs ${rows.firstOrNull()?.keys()?.asSequence()?.take(16)?.joinToString()}")
+            // Field names only, to understand an unexpected answer.
+            log("history: ${rows.size} entry(ies), fields " +
+                "${rows.firstOrNull()?.keys()?.asSequence()?.take(16)?.joinToString()}")
             History.Messages(ordered.mapNotNull(::past))
         } catch (e: IOException) {
             History.Unavailable(null)
@@ -203,12 +204,12 @@ class MuseChat(
     }
 
     /**
-     * Dépose un fichier dans les fichiers de Muse (`POST /fs/upload`, comme le SDK). Renvoie le
-     * statut HTTP, ou `null` sans réponse. [path] est relatif à la racine de ces fichiers.
+     * Puts a file in Muse's files (`POST /fs/upload`, like the SDK). Returns the HTTP status, or `null` without
+     * an answer. [path] is relative to the root of those files.
      */
     fun upload(path: String, data: ByteArray, mimeType: String): Int? {
-        require(SAFE_PATH.matches(path) && ".." !in path) { "chemin refusé" }
-        require(data.size <= MAX_IMAGE_BYTES) { "fichier de plus de 2 Mio" }
+        require(SAFE_PATH.matches(path) && ".." !in path) { "path refused" }
+        require(data.size <= MAX_IMAGE_BYTES) { "file over 2 MiB" }
         val boundary = "portal-" + UUID.randomUUID().toString()
         val body = ByteArrayOutputStream()
         fun text(value: String) = body.write(value.toByteArray())
@@ -246,8 +247,8 @@ class MuseChat(
             while (true) {
                 val chunk = stream.read(POLL_MS) ?: break
                 response.write(chunk)
-                if (response.size() > MAX_SMALL_RESPONSE_BYTES) throw IOException("réponse trop grande")
-                if (clock() > deadline) throw IOException("réponse trop lente")
+                if (response.size() > MAX_SMALL_RESPONSE_BYTES) throw IOException("answer too large")
+                if (clock() > deadline) throw IOException("answer too slow")
             }
             return status to response.toString("UTF-8")
         } finally {
@@ -258,8 +259,8 @@ class MuseChat(
     private fun ask(
         body: JSONObject, spoken: Boolean, onProgress: (ChatProgress) -> Unit, cancelled: () -> Boolean,
     ): ChatResult {
-        // L'abonnement s'ouvre avant l'envoi, pour ne rien manquer de la réponse. Une conversation
-        // à part encore inconnue répond 404 : le message la crée, on s'abonne ensuite.
+        // The subscription opens before sending, so as to miss nothing of the reply. A side chat that does not
+        // exist yet answers 404: the message creates it, and we subscribe afterwards.
         var subscription: MuseStream? = null
         try {
             var fresh = false
@@ -300,7 +301,7 @@ class MuseChat(
         }
     }
 
-    /** L'abonnement à la conversation et son statut HTTP. */
+    /** The subscription to the conversation and its HTTP status. */
     private fun subscribe(): Pair<MuseStream, Int> {
         val body = JSONObject().apply { sideChat?.let { put("session_id", it) } }
         val stream = streams.open(
@@ -319,7 +320,7 @@ class MuseChat(
         subscription: MuseStream, turn: MuseTurn, fresh: Boolean,
         onProgress: (ChatProgress) -> Unit, cancelled: () -> Boolean,
     ): ChatResult {
-        // Dans une conversation qui vient de naître, tout ce qui arrive répond à notre message.
+        // In a conversation that was just born, everything that arrives answers our message.
         val router = ReplyRouter(turn, fresh)
         val line = ByteArrayOutputStream()
         val deadline = clock() + replyTimeoutMillis
@@ -328,20 +329,20 @@ class MuseChat(
         val started = clock()
         val seen = LinkedHashMap<String, Int>()
         fun summary(reason: String) = log(
-            "bilan : $reason après ${(clock() - started) / 1000} s ; ${turn.state()} ; reçu : " +
+            "summary: $reason after ${(clock() - started) / 1000} s; ${turn.state()}; received: " +
                 seen.entries.joinToString { "${it.key} x${it.value}" },
         )
         while (true) {
             val now = clock()
             val text = turn.text()
-            // Muse peut rester « occupé » bien après sa réponse, qui n'en est pas moins là.
+            // Muse can stay "busy" long after its reply, which is there nonetheless.
             val stalled = text.isNotEmpty() && turn.stalled(now, stalledReplyMillis)
             if (turn.settled(now) || stalled || (text.isNotEmpty() && turn.complete(now))) {
-                summary(if (stalled) "réponse écrite, tâche encore ouverte" else "réponse terminée")
+                summary(if (stalled) "reply written, task still open" else "reply finished")
                 return ChatResult.Answer(text, false, turn.messageIds())
             }
             if (!open || now >= deadline || cancelled()) {
-                summary(if (!open) "flux fermé" else if (cancelled()) "abandon" else "délai dépassé")
+                summary(if (!open) "stream closed" else if (cancelled()) "abandon" else "deadline exceeded")
                 return if (text.isEmpty()) ChatResult.Failed(ChatFailure.NO_REPLY)
                 else ChatResult.Answer(text, true, turn.messageIds())
             }
@@ -351,12 +352,12 @@ class MuseChat(
                 for (byte in chunk ?: ByteArray(0)) {
                     if (byte != '\n'.code.toByte()) {
                         line.write(byte.toInt())
-                        if (line.size() > MAX_EVENT_BYTES) throw IOException("événement trop grand")
+                        if (line.size() > MAX_EVENT_BYTES) throw IOException("event too large")
                         continue
                     }
                     parse(line.toString("UTF-8"))?.let { event ->
                         var name = (event.opt("event") as? String)?.take(48) ?: "?"
-                        // Le genre des événements vocaux, jamais leur contenu.
+                        // The kind of the voice events, never their content.
                         val kind = event.optJSONObject("payload")?.let { payload ->
                             (payload.optJSONObject("event")?.opt("type") ?: payload.opt("type")) as? String
                         }
@@ -374,7 +375,7 @@ class MuseChat(
             } catch (e: IOException) {
                 open = false
             } catch (e: IllegalStateException) {
-                open = false // la réponse dépasse les limites
+                open = false // the reply exceeds the limits
             }
         }
     }
@@ -399,8 +400,8 @@ private fun messageIdOf(event: JSONObject, payload: JSONObject) =
     payload.text("message_id") ?: event.text("message_id") ?: payload.text("id")
 
 /**
- * Ne transmet à [turn] que ce qui suit notre propre message : après son `message.user`, ou ce
- * qui le désigne comme parent. Les répétitions de `seq` sont écartées.
+ * Passes [turn] only what follows our own message: after its `message.user`, or what names it as parent.
+ * Repeated `seq` values are dropped.
  */
 internal class ReplyRouter(private val turn: MuseTurn, private var afterOurs: Boolean = false) {
     private var lastSeq = 0L
@@ -411,7 +412,7 @@ internal class ReplyRouter(private val turn: MuseTurn, private var afterOurs: Bo
         val name = event.opt("event")
         val seq = (event.opt("seq") as? Number)?.toLong()
         if (seq != null) {
-            // Les messages enregistrés et les événements en direct sont numérotés à part.
+            // Saved messages and live events are numbered separately.
             if (name == "message.user" || name == "message.assistant") {
                 if (seq <= lastRowSeq) return
                 lastRowSeq = seq
@@ -432,7 +433,7 @@ internal class ReplyRouter(private val turn: MuseTurn, private var afterOurs: Bo
     }
 }
 
-/** Le travail de Muse sur une demande, lié au message utilisateur accusé réception. */
+/** Muse's work on a request, linked to the acknowledged user message. */
 internal class MuseTurn(private val clock: () -> Long) {
     private class Reply(var text: String = "", var done: Boolean = false, var bound: Boolean = false)
 
@@ -451,23 +452,23 @@ internal class MuseTurn(private val clock: () -> Long) {
 
     fun knows(id: String?) = id != null && id in replies
 
-    /** Ce qui retient la fin de la demande, sans rien du contenu. */
-    fun state() = "${replies.size} message(s) dont ${replies.values.count { it.done }} clos, " +
-        (if (busy) "Muse occupé, " else "") + if (taskFinished) "tâche finie" else "tâche non signalée finie"
+    /** What holds back the end of the request, with nothing of the content. */
+    fun state() = "${replies.size} message(s), ${replies.values.count { it.done }} closed, " +
+        (if (busy) "Muse busy, " else "") + if (taskFinished) "task finished" else "task not reported finished"
 
-    /** Les messages complets qui ont un texte. */
+    /** The complete messages that have text. */
     fun finishedIds(): List<String> = replies.filterValues { it.done && it.text.isNotBlank() }.keys.toList()
 
-    /** Tous les messages sont clos et aucun n'a bougé depuis [quietMillis]. */
+    /** All messages are closed and none has moved for [quietMillis]. */
     fun stalled(now: Long, quietMillis: Long): Boolean =
         replies.isNotEmpty() && replies.values.all { it.done } && now - lastReplyAt >= quietMillis
 
-    /** Les messages de la réponse qui ont un texte. */
+    /** The messages of the reply that have text. */
     fun messageIds(): List<String> = replies.filterValues { it.text.isNotBlank() }.keys.toList()
 
     fun text(): String = replies.values.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n")
 
-    /** Faux si l'accusé de réception ne désigne pas notre message. */
+    /** False if the acknowledgement does not name our message. */
     fun acknowledge(response: String): Boolean {
         val result = try {
             val whole = JSONObject(response)
@@ -501,7 +502,7 @@ internal class MuseTurn(private val clock: () -> Long) {
         val status = payload.opt("status") as? String
         val parent = parentOf(payload)
         val parentLinked = parent != null && (parent in userIds || replies[parent]?.bound == true)
-        // Une conversation partagée porte aussi les statuts d'autres demandes.
+        // A shared conversation also carries the statuses of other requests.
         if (parent != null && !parentLinked) return
         val linked = parentLinked || replies[payload.text("message_id")]?.bound == true
         val terminal = status in TERMINAL
@@ -526,7 +527,7 @@ internal class MuseTurn(private val clock: () -> Long) {
         }
         if (known == null) {
             if (id in ignored) return
-            check(replies.size < MAX_MESSAGES) { "trop de messages pour une demande" }
+            check(replies.size < MAX_MESSAGES) { "too many messages for one request" }
         }
         val reply = known ?: Reply().also { replies[id] = it }
         if (parent != null) reply.bound = parent in userIds || replies[parent]?.bound == true
@@ -539,7 +540,7 @@ internal class MuseTurn(private val clock: () -> Long) {
             finalText(payload, id)?.let { reply.text = stripControls(it) }
             if (name == "delta.message_done" || payload.opt("display_text_ready") != false) reply.done = true
         }
-        check(reply.text.length <= MAX_TEXT_CHARS) { "réponse trop longue" }
+        check(reply.text.length <= MAX_TEXT_CHARS) { "reply too long" }
     }
 
     private fun finalText(payload: JSONObject, id: String): String? {
@@ -549,7 +550,7 @@ internal class MuseTurn(private val clock: () -> Long) {
         return transcriptText(transcript as? JSONObject, id) ?: payload.opt("content") as? String
     }
 
-    /** Seulement le texte de l'assistant dans le transcript structuré. */
+    /** Only the assistant's text in the structured transcript. */
     private fun transcriptText(transcript: JSONObject?, id: String): String? {
         val messages = transcript?.optJSONArray("messages") ?: return null
         val ours = (0 until messages.length()).mapNotNull { messages.optJSONObject(it) }

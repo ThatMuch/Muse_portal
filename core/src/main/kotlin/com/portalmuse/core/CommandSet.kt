@@ -7,15 +7,15 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** Un groupe de commandes que l'appareil propose à Muse. */
+/** A group of commands the device offers to Muse. */
 interface CommandSet {
     fun specs(): Map<String, JSONObject>
 
-    /** `null` si [command] n'est pas de ce groupe. */
+    /** `null` if [command] does not belong to this group. */
     fun run(command: String, params: JSONObject): JSONObject?
 }
 
-/** La forme commune des déclarations et des réponses. Les textes pour Muse sont en anglais. */
+/** The common shape of declarations and answers. Texts meant for Muse are in English. */
 internal object Specs {
     fun field(type: String, description: String): JSONObject = JSONObject().put("type", type).put("description", description)
 
@@ -30,12 +30,12 @@ internal object Specs {
         (from.opt(key) as? String)?.trim()?.takeIf { it.isNotEmpty() }?.take(max)
 }
 
-/** La lecture et le chargement d'une liste d'images désignées par Muse. */
+/** Reading and loading a list of pictures named by Muse. */
 internal object Pictures {
     private const val MAX_PATH_CHARS = 2_048
     private const val MAX_CAPTION_CHARS = 200
 
-    /** (source, légende) pour chaque élément, ou `null` si l'un d'eux est invalide. */
+    /** (source, caption) for each item, or `null` if one of them is invalid. */
     fun parse(list: JSONArray): List<Pair<PictureSource, String?>>? = (0 until list.length()).map { index ->
         val item = list.optJSONObject(index) ?: return null
         val url = Specs.text(item, "url", MAX_PATH_CHARS)
@@ -45,7 +45,7 @@ internal object Pictures {
         source to Specs.text(item, "caption", MAX_CAPTION_CHARS)
     }
 
-    /** En parallèle, avec une échéance commune : une image lente ne bloque pas les autres. */
+    /** In parallel, with a shared deadline: one slow picture does not block the others. */
     fun load(sources: List<PictureSource>, load: (PictureSource) -> Any?, deadlineSeconds: Long): List<Any?> {
         val pool = Executors.newFixedThreadPool(minOf(sources.size, 4))
         return try {

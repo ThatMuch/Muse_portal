@@ -17,8 +17,8 @@ private const val RATE = 24_000
 private const val FRAME_BYTES = 960 * 2 // 40 ms
 
 /**
- * Micro et haut-parleur d'un appel. L'autorisation du micro doit déjà être accordée. Après
- * « Hey Muse », la capture est celle de [wakeMic], déjà en cours.
+ * Microphone and speaker of a call. The microphone permission must already be granted. After "Hey Muse",
+ * capture is the one of [wakeMic], already running.
  */
 @SuppressLint("MissingPermission")
 class PhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : CallAudio {
@@ -54,18 +54,18 @@ class PhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : CallA
 
     private fun openRecorder(): AudioRecord {
         val minimum = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        check(minimum > 0) { "capture à 24 kHz indisponible" }
+        check(minimum > 0) { "24 kHz capture unavailable" }
         val opened = AudioRecord(
-            // La même source que les notes vocales, que Muse comprend bien sur ce Portal. Le micro
-            // étant coupé pendant que Muse parle, l'annulation d'écho n'est pas nécessaire.
+            // The same source as voice notes, which Muse understands well on this Portal. The microphone being
+            // muted while Muse speaks, echo cancellation is not needed.
             MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE, AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT, maxOf(minimum, FRAME_BYTES * 8),
         )
-        check(opened.state == AudioRecord.STATE_INITIALIZED) { "micro indisponible" }
+        check(opened.state == AudioRecord.STATE_INITIALIZED) { "microphone unavailable" }
         return opened
     }
 
-    /** Vrai si le volume des médias est à zéro : on n'entendrait rien. */
+    /** True if the media volume is at zero: nothing would be heard. */
     val silentSpeaker get() = manager.getStreamVolume(AudioManager.STREAM_MUSIC) == 0
 
     override fun read(): ByteArray? {
@@ -101,11 +101,11 @@ class PhoneAudio(context: Context, private val wakeMic: WakeMic? = null) : CallA
         wakeMic?.stop()
     }
 
-    /** Après la fin de l'appel seulement. */
+    /** Only after the end of the call. */
     fun release() {
         capturing = false
-        // Niveau seulement, jamais le son.
-        Log.i(TAG, "appel : crête du micro $loudest, haut-parleur ${if (silentSpeaker) "muet" else "actif"}")
+        // The level only, never the sound.
+        Log.i(TAG, "call: microphone peak $loudest, speaker ${if (silentSpeaker) "muted" else "active"}")
         runCatching { recorder?.stop() }
         recorder?.release()
         wakeMic?.close()

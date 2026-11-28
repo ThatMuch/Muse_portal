@@ -1,15 +1,15 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/noise/envelope.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/noise/envelope.py
 package com.portalmuse.core
 
 enum class ServiceType(val wire: Int) {
     DAEMON(0),
 
-    /** L'API Gadget de la VM, prévue pour les jetons d'appareil. */
+    /** The VM's Gadget API, meant for device tokens. */
     GADGET(6),
 }
 
-/** Une trame de flux HTTP transportée dans la session Noise. */
+/** An HTTP stream frame carried in the Noise session. */
 sealed class ServiceFrame(val streamId: Long) {
     class Request(
         streamId: Long,
@@ -34,21 +34,21 @@ sealed class ServiceFrame(val streamId: Long) {
 }
 
 object Envelope {
-    /** Appareil vers VM : `ServiceRequest`. */
+    /** Device to VM: `ServiceRequest`. */
     fun encodeRequest(service: ServiceType, frame: ServiceFrame): ByteArray {
         val writer = ProtoWriter()
         if (service.wire != 0) writer.varint(1, service.wire.toLong())
         return writer.bytes(2, encodeFrame(frame)).toByteArray()
     }
 
-    /** VM vers appareil : `ServiceResponse`. */
+    /** VM to device: `ServiceResponse`. */
     fun decodeResponse(data: ByteArray): ServiceFrame {
         val payload = ProtoReader.read(data).lastOrNull { it.id == 1 }?.asBytes()
-        if (payload == null || payload.isEmpty()) throw NoiseError("réponse de service vide")
+        if (payload == null || payload.isEmpty()) throw NoiseError("empty service response")
         return decodeFrame(payload)
     }
 
-    /** Sens inverses, pour la VM simulée des tests. */
+    /** The opposite directions, for the simulated VM of the tests. */
     internal fun encodeResponse(frame: ServiceFrame): ByteArray = ProtoWriter().bytes(1, encodeFrame(frame)).toByteArray()
 
     internal fun decodeRequest(data: ByteArray): Pair<ServiceType, ServiceFrame> {
@@ -102,10 +102,10 @@ object Envelope {
         for (field in ProtoReader.read(data)) {
             if (field.id == 1) streamId = field.asLong() else if (field.id in 2..5) body = field
         }
-        val kind = body ?: throw NoiseError("trame de service sans contenu")
+        val kind = body ?: throw NoiseError("service frame without content")
         val all = ProtoReader.read(kind.asBytes())
         val fields = all.associateBy { it.id }
-        /** Les en-têtes sont un champ répété : 3 dans une requête, 2 dans une réponse. */
+        /** Headers are a repeated field: 3 in a request, 2 in a response. */
         fun headers(id: Int) = all.filter { it.id == id }.map { header ->
             val parts = ProtoReader.read(header.asBytes()).associateBy { it.id }
             (parts[1]?.asString() ?: "") to (parts[2]?.asString() ?: "")

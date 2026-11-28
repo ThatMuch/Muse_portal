@@ -54,7 +54,7 @@ class AvatarTest {
         }
     }
 
-    /** La description sert au diagnostic : des noms de champs, aucune valeur. */
+    /** The description is for diagnosis: field names, no values. */
     @Test fun theShapeNamesFieldsOnly() {
         val shape = AvatarParser.shape(identity)
         assertTrue(shape, "image_path" in shape && "idle" in shape && "working" in shape)
@@ -69,7 +69,7 @@ class AvatarTest {
 
     private fun mp4(size: Int) = ByteArray(size) { (it % 249).toByte() }
 
-    /** VM qui sert [file] par plages ; [cap] limite la taille d'une réponse, [ranges] les ignore. */
+    /** VM that serves [file] in ranges; [cap] limits the size of an answer, [ranges] ignores them. */
     private fun fileVm(file: ByteArray, cap: Int = Int.MAX_VALUE, ranges: Boolean = true, contentRange: Boolean = true) = FakeVm(
         onRequest = { call ->
             if (call.path == "/identity") {

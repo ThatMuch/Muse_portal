@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/rtc/join.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/rtc/join.py
 package com.portalmuse.core.rtc
 
 import org.bouncycastle.asn1.ASN1Integer
@@ -28,13 +28,13 @@ private const val MAX_RESPONSE_BYTES = 16 * 1024
 private const val ICE_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/"
 private const val DAY_MS = 86_400_000L
 
-/** Le type d'accès média annoncé par la VM, en code numérique du JOIN. */
+/** The media access type announced by the VM, as a numeric JOIN code. */
 val ENDPOINT_TYPES = mapOf("META_AI" to 2, "HATCH" to 8)
 
-/** Une identité DTLS : champs obligatoires du JOIN, sans emploi puisque la clé SRTP y voyage. */
+/** A DTLS identity: mandatory JOIN fields, unused since the SRTP key travels there. */
 class DtlsIdentity(val keyPem: String, val certificatePem: String, val fingerprint: String)
 
-/** Tout ce que le client tire au sort pour un appel. */
+/** Everything the client draws at random for a call. */
 class JoinSecrets(
     val clientUfrag: String, val serverUfrag: String, val clientPwd: String, val serverPwd: String,
     val srtpKey: ByteArray, val clientFingerprint: String, val serverKeyPem: String, val serverCertPem: String,
@@ -55,7 +55,7 @@ object Join {
             Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(der) +
             "\n-----END $label-----\n"
 
-    /** Une clé P-256 et un certificat autosigné de 30 jours. */
+    /** A P-256 key and a self-signed certificate valid for 30 days. */
     fun identity(): DtlsIdentity {
         val pair = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1"), random) }
             .generateKeyPair()
@@ -102,7 +102,7 @@ object Join {
         )
     }
 
-    /** Les paramètres de session de l'appel : usage, destinataire, point d'entrée et conversation. */
+    /** The session parameters of the call: usage, recipient, entry point and conversation. */
     private fun sessionParams(threadId: String?): ByteArray = ThriftWriter().apply {
         i32(1, 0)
         binary(2, "")
@@ -111,7 +111,7 @@ object Join {
         stop()
     }.bytes()
 
-    /** Une demande « média seul » avec voix et vidéo de Muse. */
+    /** A "media only" request with Muse's voice and video. */
     fun build(edgeHost: String, edgePort: Int, vipType: Int, threadId: String? = null, secrets: JoinSecrets = newSecrets()): JoinOffer {
         val writer = ThriftWriter()
         writer.binary(1, secrets.clientSessionId)
@@ -141,18 +141,18 @@ object Join {
     }
 
     fun parseResponse(payload: ByteArray): JoinAnswer {
-        require(payload.size <= MAX_RESPONSE_BYTES) { "réponse JOIN trop grande" }
+        require(payload.size <= MAX_RESPONSE_BYTES) { "JOIN response too large" }
         val reader = ThriftReader(payload)
         val header = reader.struct()
-        val answer = reader.struct()[2] as? Map<*, *> ?: throw IllegalArgumentException("réponse JOIN sans joinResponse")
+        val answer = reader.struct()[2] as? Map<*, *> ?: throw IllegalArgumentException("JOIN response without joinResponse")
         fun text(id: Int): String = when (val value = answer[id]) {
             null -> ""
             is ByteArray -> String(value)
-            else -> throw IllegalArgumentException("joinResponse mal formée")
+            else -> throw IllegalArgumentException("malformed joinResponse")
         }
-        require(text(1).isNotEmpty()) { "réponse JOIN sans identifiant serveur" }
+        require(text(1).isNotEmpty()) { "JOIN response without server identifier" }
         val status = header[4] as? Long
-        require(status == null || status == 200L) { "JOIN refusé ($status)" }
+        require(status == null || status == 200L) { "JOIN refused ($status)" }
         return JoinAnswer(text(1), text(2), text(3))
     }
 }

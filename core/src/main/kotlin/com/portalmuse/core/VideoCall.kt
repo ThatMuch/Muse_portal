@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/video_call.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/video_call.py
 package com.portalmuse.core
 
 import com.portalmuse.core.rtc.ENDPOINT_TYPES
@@ -20,55 +20,55 @@ import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-private const val FRAME_BYTES = 960 * 2 // 20 ms à 48 kHz
+private const val FRAME_BYTES = 960 * 2 // 20 ms at 48 kHz
 private const val SETTLE_MS = 200L
 private const val ECHO_TAIL_MS = 300L
-/** Le son de Muse porte un léger bruit entre ses réponses : seul un son plus fort compte. */
+/** Muse's sound carries a faint noise between its replies: only louder sound counts. */
 private const val AUDIBLE_RMS = 300.0
-/** Un bruit isolé ne prolonge pas l'appel : il faut [SUSTAINED] paquets forts en [SUSTAINED_MS]. */
+/** An isolated noise does not extend the call: it takes [SUSTAINED] loud packets within [SUSTAINED_MS]. */
 private const val SUSTAINED = 5
 private const val SUSTAINED_MS = 500L
 private const val FAREWELL_MS = 2_500L
-/** Après un « au revoir » : le temps laissé à Muse pour commencer, puis finir, sa réponse. */
+/** After a "goodbye": the time left to Muse to start, then finish, its reply. */
 private const val GOODBYE_WAIT_MS = 6_000L
 private const val GOODBYE_SETTLE_MS = 1_500L
-/** La transcription arrive quelques secondes après la parole. */
+/** The transcription arrives a few seconds after the speech. */
 private const val OWN_SPEECH_MS = 12_000L
 private const val HEARD = "conversation.item.input_audio_transcription.completed"
 private const val MAX_EVENT_BYTES = 256 * 1024
 private const val MAX_QUEUED_PACKETS = 250 // 5 s
 
-/** Le micro, le haut-parleur et le codec Opus d'un appel vidéo. Le son est en PCM 48 kHz mono. */
+/** The microphone, speaker and Opus codec of a video call. Sound is 48 kHz mono PCM. */
 interface VideoAudio {
-    /** 20 ms de micro (1920 octets) ; `null` une fois la capture arrêtée. */
+    /** 20 ms of microphone (1920 bytes); `null` once capture has stopped. */
     fun read(): ByteArray?
 
-    /** Zéro, un ou plusieurs paquets Opus. */
+    /** Zero, one or several Opus packets. */
     fun encode(pcm: ByteArray): List<ByteArray>
 
-    /** Le son d'un paquet reçu ; peut être vide. */
+    /** The sound of a received packet; may be empty. */
     fun decode(opus: ByteArray): ByteArray
 
-    /** Peut bloquer le temps que le haut-parleur accepte le son. */
+    /** May block while the speaker accepts the sound. */
     fun play(pcm: ByteArray)
 
     fun stopCapture()
 }
 
 /**
- * Un appel vidéo : la signalisation passe par la session Muse, le média va directement au point
- * d'accès que donne la VM. Micro coupé pendant que Muse parle ; seule sa voix prolonge l'appel.
- * Aucune image ne part du Portal. Un appel ne sert qu'une fois.
+ * A video call: signalling goes through the Muse session, media goes directly to the endpoint the VM gives.
+ * Microphone muted while Muse speaks; only its voice extends the call. No picture leaves the Portal. A call is
+ * used only once.
  */
 class VideoCall(
     private val link: MuseStreams,
     private val deviceId: String,
     private val audio: VideoAudio,
-    /** Les images de Muse, depuis le fil de réception. */
+    /** Muse's pictures, from the receiving thread. */
     private val onVideo: (ByteArray) -> Unit,
     private val onEvent: (CallEvent) -> Unit = {},
     private val idleTimeoutMillis: Long = 20_000,
-    /** Après « Hey Muse » : l'appel se ferme si Muse n'a rien dit au bout de ce temps. */
+    /** After "Hey Muse": the call closes if Muse has said nothing after this time. */
     private val firstTurnTimeoutMillis: Long? = null,
     private val overallTimeoutMillis: Long = 300_000,
     private val readyTimeoutMillis: Long = 35_000,
@@ -76,7 +76,7 @@ class VideoCall(
     private val mediaTimeoutMillis: Long = 10_000,
     private val permitted: (InetAddress) -> Boolean = WebImages::isPublic,
     private val log: (String) -> Unit = {},
-    /** Le nom donné à Muse, qu'un « au revoir » peut contenir. */
+    /** The name given to Muse, which a "goodbye" may contain. */
     private val museName: String? = null,
 ) {
     private val callId = UUID.randomUUID().toString()
@@ -87,7 +87,7 @@ class VideoCall(
     @Volatile private var media: MediaSession? = null
     @Volatile private var stopAsked = 0L
     @Volatile private var goodbyeAt = 0L
-    /** Dernière fois qu'on a parlé devant cet appareil. */
+    /** Last time someone spoke in front of this device. */
     @Volatile private var spokeAt = 0L
     private var events: MuseStream? = null
     private val received = LinkedBlockingDeque<ByteArray>(MAX_QUEUED_PACKETS)
@@ -98,7 +98,7 @@ class VideoCall(
         hungUp = true
     }
 
-    /** Un dernier ordre d'images : à appeler quand l'écran peut recommencer à afficher. */
+    /** A last order about pictures: call it when the screen can start showing again. */
     fun requestKeyframe() {
         media?.requestKeyframe()
     }
@@ -119,13 +119,13 @@ class VideoCall(
             workers += thread(name = "video-events") { followEvents() }
             CallResult.Ended(watch(session))
         } catch (e: Problem) {
-            log("appel vidéo interrompu : ${e.message}")
+            log("video call interrupted: ${e.message}")
             CallResult.Failed(e.failure, e.status)
         } catch (e: IOException) {
-            log("appel vidéo interrompu : ${e.message}")
+            log("video call interrupted: ${e.message}")
             if (hungUp) CallResult.Ended(CallEnd.HUNG_UP) else CallResult.Failed(CallFailure.CONNECTION, null)
         } catch (e: IllegalArgumentException) {
-            log("appel vidéo : réponse inattendue (${e.message})")
+            log("video call: unexpected answer (${e.message})")
             CallResult.Failed(CallFailure.PROTOCOL, null)
         } catch (e: NoiseError) {
             CallResult.Failed(CallFailure.CONNECTION, null)
@@ -136,13 +136,13 @@ class VideoCall(
             workers.forEach { it.join(1_000) }
             media?.let {
                 log(
-                    "bilan vidéo : ${it.stats.transport}, ${it.stats.videoFrames} images, " +
-                        "${it.stats.audioPackets} paquets de son, ${it.stats.rejected} rejetés",
+                    "video summary: ${it.stats.transport}, ${it.stats.videoFrames} pictures, " +
+                        "${it.stats.audioPackets} sound packets, ${it.stats.rejected} rejected",
                 )
                 log(
-                    "bilan micro vidéo : $micFrames morceaux (dont $micAudible avec du son, $micMuted en " +
-                        "silence forcé), niveau maximal ${micPeak.toInt()}, $sentPackets paquets envoyés ; " +
-                        "Muse audible dans $museAudible paquets",
+                    "video microphone summary: $micFrames chunks ($micAudible with sound, $micMuted forced " +
+                        "silence), peak level ${micPeak.toInt()}, $sentPackets packets sent; Muse audible in " +
+                        "$museAudible packets",
                 )
                 it.close()
             }
@@ -150,14 +150,14 @@ class VideoCall(
         }
     }
 
-    /** Le point d'accès, la demande d'entrée, puis la connexion du média. */
+    /** The endpoint, the join request, then the media connection. */
     private fun start(onAdmission: () -> Unit): MediaSession {
-        val endpoint = call("GET", "/voice/calls/media-endpoint", null, readyTimeoutMillis, "point d'accès média")
+        val endpoint = call("GET", "/voice/calls/media-endpoint", null, readyTimeoutMillis, "media endpoint")
         val host = endpoint.opt("host") as? String
         val port = endpoint.opt("port") as? Int
         val type = ENDPOINT_TYPES[endpoint.opt("vip_type") as? String]
         if (host.isNullOrEmpty() || port == null || port !in 1..65535 || type == null) {
-            throw Problem(CallFailure.PROTOCOL, "point d'accès média invalide")
+            throw Problem(CallFailure.PROTOCOL, "invalid media endpoint")
         }
         val offer = Join.build(host, port, type)
         val body = JSONObject()
@@ -165,17 +165,17 @@ class VideoCall(
             .put("call_id", callId).put("call_media_type", "video").put("device", "mcu-wearable")
             .put("device_id", deviceId).put("proactive_greeting_enabled", false)
             .put("enable_media_to_cosmos", endpoint.optBoolean("enable_media_to_cosmos"))
-        // Même une demande incertaine peut avoir ouvert l'appel : il faudra le clore.
+        // Even an uncertain request may have opened the call: it will have to be closed.
         onAdmission()
-        val joined = call("POST", "/voice/calls/join", body, readyTimeoutMillis, "entrée dans l'appel")
+        val joined = call("POST", "/voice/calls/join", body, readyTimeoutMillis, "joining the call")
         val payload = joined.opt("payload_b64") as? String
-            ?: throw Problem(CallFailure.PROTOCOL, "aucun média accordé")
+            ?: throw Problem(CallFailure.PROTOCOL, "no media granted")
         val answer = Join.parseResponse(Base64.getDecoder().decode(payload))
         val session = MediaSession(
             offer.secrets, answer, host, port,
             object : MediaListener {
                 override fun audio(opus: ByteArray) {
-                    // Borne la latence : après un à-coup, le plus ancien son est oublié.
+                    // Bounds latency: after a hiccup, the oldest sound is forgotten.
                     while (!received.offerLast(opus)) received.pollFirst()
                 }
 
@@ -186,7 +186,7 @@ class VideoCall(
             permitted,
         )
         media = session
-        log("appel vidéo : média connecté en ${session.connect(readyTimeoutMillis)}")
+        log("video call: media connected over ${session.connect(readyTimeoutMillis)}")
         return session
     }
 
@@ -202,9 +202,9 @@ class VideoCall(
         try {
             while (!ended) {
                 val pcm = audio.read() ?: return
-                // Pendant que Muse parle, le micro capte surtout son écho : on envoie du silence.
+                // While Muse speaks, the microphone mostly picks up its echo: silence is sent.
                 val gated = clock() < playingUntil + ECHO_TAIL_MS
-                // Des niveaux seulement, jamais le son.
+                // Levels only, never the sound.
                 val level = rms(pcm)
                 micFrames++
                 if (gated) micMuted++
@@ -219,7 +219,7 @@ class VideoCall(
                 }
             }
         } catch (e: RuntimeException) {
-            if (!ended) log("appel vidéo : micro en échec (${e.javaClass.simpleName})")
+            if (!ended) log("video call: microphone failed (${e.javaClass.simpleName})")
             hungUp = true
         }
     }
@@ -235,7 +235,7 @@ class VideoCall(
                     if (pcm.isNotEmpty()) {
                         if (rms(pcm) > AUDIBLE_RMS) {
                             museAudible++
-                            // Le micro est coupé avant que le son ne sorte.
+                            // The microphone is muted before the sound comes out.
                             playingUntil = clock() + pcm.size / 96 + SETTLE_MS
                             loud.addLast(clock())
                             while (loud.isNotEmpty() && clock() - loud.first() > SUSTAINED_MS) loud.removeFirst()
@@ -251,7 +251,7 @@ class VideoCall(
                 }
             }
         } catch (e: RuntimeException) {
-            if (!ended) log("appel vidéo : haut-parleur en échec (${e.javaClass.simpleName})")
+            if (!ended) log("video call: speaker failed (${e.javaClass.simpleName})")
             hungUp = true
         }
     }
@@ -262,9 +262,9 @@ class VideoCall(
             val now = clock()
             if (hungUp) return CallEnd.HUNG_UP
             if (session.lost || now - session.lastMediaAt > mediaTimeoutMillis) {
-                // Muse qui raccroche coupe son média ; sans aucun paquet, c'est la connexion.
+                // Muse hanging up cuts its media; without any packet at all, it is the connection.
                 if (session.stats.audioPackets + session.stats.videoFrames > 0) return CallEnd.REMOTE_END
-                throw Problem(CallFailure.CONNECTION, "aucun média reçu")
+                throw Problem(CallFailure.CONNECTION, "no media received")
             }
             if (stopAsked != 0L && now - stopAsked >= FAREWELL_MS && now >= playingUntil) return CallEnd.REMOTE_STOP
             val goodbye = goodbyeAt
@@ -282,8 +282,8 @@ class VideoCall(
     }
 
     /**
-     * La vidéo n'a pas de canal d'événements propre. On suit la conversation le temps de l'appel,
-     * pour la demande de raccrocher de Muse et pour savoir ce qui y passe (des noms seulement).
+     * Video has no event channel of its own. The conversation is followed during the call, for Muse's hang-up
+     * request and to know what goes through it (names only).
      */
     private fun followEvents() {
         val seen = LinkedHashMap<String, Int>()
@@ -305,7 +305,7 @@ class VideoCall(
                 for (byte in stream.read(100) ?: break) {
                     if (byte != '\n'.code.toByte()) {
                         line.write(byte.toInt())
-                        // Une ligne démesurée (un instantané) est abandonnée.
+                        // An oversized line (a snapshot) is dropped.
                         if (line.size() > MAX_EVENT_BYTES) line.reset()
                         continue
                     }
@@ -319,28 +319,28 @@ class VideoCall(
                     val name = (event.opt("event") as? String ?: "?").take(48)
                     if (seen.size < 40 || name in seen) seen[name] = (seen[name] ?: 0) + 1
                     if (name.startsWith("hatch.voice")) read(event, callId in text, shapes)
-                    // Ce qui est dit à Muse est aussi versé dans la conversation.
+                    // What is said to Muse is also added to the conversation.
                     if (name == "message.user") readMessage(event, shapes)
                 }
             }
         } catch (e: IOException) {
-            if (!ended) log("événements de l'appel vidéo indisponibles")
+            if (!ended) log("video call events unavailable")
         } finally {
             if (seen.isNotEmpty()) {
-                log("événements pendant la vidéo : " + seen.entries.joinToString { "${it.key} x${it.value}" })
+                log("events during the video: " + seen.entries.joinToString { "${it.key} x${it.value}" })
             }
         }
     }
 
     /**
-     * Un événement vocal relayé : un ordre d'arrêt de Muse, ou un « au revoir » de l'utilisateur.
-     * [ours] : il porte l'identifiant de cet appel. Sinon il n'est retenu que si on vient de
-     * parler ici, un autre appel pouvant avoir lieu sur le téléphone.
+     * A relayed voice event: a stop order from Muse, or a "goodbye" from the user. [ours]: it carries this
+     * call's identifier. Otherwise it only counts if someone has just spoken here, another call possibly
+     * happening on the phone.
      */
     private fun read(event: JSONObject, ours: Boolean, shapes: MutableSet<String>) {
-        // La structure seule, pour comprendre ces événements : quelques exemplaires différents.
+        // The structure only, to understand these events: a few different samples.
         val shape = VoiceEvents.shape(event)
-        if (shapes.size < 14 && shapes.add(shape)) log("forme d'un événement vocal (appel reconnu : $ours) : $shape")
+        if (shapes.size < 14 && shapes.add(shape)) log("shape of a voice event (call recognized: $ours): $shape")
         val here = ours || spokeAt != 0L && clock() - spokeAt < OWN_SPEECH_MS
         for (item in VoiceEvents.objects(event)) {
             val stop = item.opt("type") == "session_control" &&
@@ -349,11 +349,11 @@ class VideoCall(
                 (item.opt("transcript") as? String)?.let { Farewell.matches(it, museName) } == true
             if (!stop && !goodbye) continue
             if (!here) {
-                log("fin demandée, mais pas par cet appareil")
+                log("end requested, but not by this device")
             } else if (stop) {
                 stopAsked = clock()
             } else if (goodbyeAt == 0L) {
-                log("« au revoir » entendu")
+                log("“goodbye” heard")
                 goodbyeAt = clock()
             }
         }
@@ -361,18 +361,18 @@ class VideoCall(
 
     private fun readMessage(event: JSONObject, shapes: MutableSet<String>) {
         val shape = VoiceEvents.shape(event)
-        if (shapes.size < 14 && shapes.add(shape)) log("forme d'un message pendant la vidéo : $shape")
+        if (shapes.size < 14 && shapes.add(shape)) log("shape of a message during the video: $shape")
         val payload = event.optJSONObject("payload") ?: return
         val said = listOf("display_text", "transcript", "content", "text")
             .firstNotNullOfOrNull { (payload.opt(it) as? String)?.takeIf { value -> value.isNotBlank() } } ?: return
         val here = spokeAt != 0L && clock() - spokeAt < OWN_SPEECH_MS
         if (here && goodbyeAt == 0L && Farewell.matches(said, museName)) {
-            log("« au revoir » entendu")
+            log("“goodbye” heard")
             goodbyeAt = clock()
         }
     }
 
-    /** Une petite requête à la VM, qui répond `{"ok":true,"result":{…}}`. */
+    /** A small request to the VM, which answers `{"ok":true,"result":{…}}`. */
     private fun call(verb: String, path: String, body: JSONObject?, timeout: Long, what: String): JSONObject {
         val headers = if (body == null) emptyList() else listOf("Content-Type" to "application/json")
         val stream = link.open(
@@ -385,15 +385,15 @@ class VideoCall(
             while (clock() < deadline && response.size() < 256 * 1024) {
                 response.write(stream.read(100) ?: break)
             }
-            if (status !in 200..299) throw Problem(CallFailure.REFUSED, "$what refusé : HTTP $status", status)
+            if (status !in 200..299) throw Problem(CallFailure.REFUSED, "$what refused: HTTP $status", status)
             val json = try {
                 JSONObject(response.toString("UTF-8"))
             } catch (e: JSONException) {
-                throw Problem(CallFailure.PROTOCOL, "$what : réponse illisible")
+                throw Problem(CallFailure.PROTOCOL, "$what: unreadable answer")
             }
             val result = json.optJSONObject("result")
             if (json.opt("ok") != true || result == null) {
-                throw Problem(CallFailure.REFUSED, "$what refusé", status)
+                throw Problem(CallFailure.REFUSED, "$what refused", status)
             }
             return result
         } finally {
@@ -408,13 +408,13 @@ class VideoCall(
             val body = JSONObject().put("call_id", callId)
                 .put("call_started_at", startedAt.format(format))
                 .put("call_ended_at", endedAt.format(format))
-            if (call("POST", "/voice/end-call", body, cleanupTimeoutMillis, "fin d'appel").opt("ok") != true) {
-                log("fin d'appel non confirmée par le serveur")
+            if (call("POST", "/voice/end-call", body, cleanupTimeoutMillis, "end of call").opt("ok") != true) {
+                log("end of call not confirmed by the server")
             }
         } catch (e: Problem) {
-            log("fin d'appel non confirmée : ${e.message}")
+            log("end of call not confirmed: ${e.message}")
         } catch (e: IOException) {
-            log("fin d'appel non confirmée : ${e.javaClass.simpleName}")
+            log("end of call not confirmed: ${e.javaClass.simpleName}")
         }
     }
 

@@ -5,9 +5,9 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 
-/** Des bips courts : « j'ai entendu » et « regardez l'écran ». */
+/** Short beeps: "I heard you" and "look at the screen". */
 object Chime {
-    /** Bref : on peut déjà parler pendant qu'il retentit. */
+    /** Short: you can already speak while it plays. */
     fun heard() = play(ToneGenerator.TONE_PROP_BEEP, 100)
 
     fun alert() = play(ToneGenerator.TONE_PROP_BEEP2, 400)

@@ -82,7 +82,7 @@ class RtcTest {
         assertFalse(Stun.isSuccess(success.copyOf(30), transaction, "secret-password"))
     }
 
-    // Vecteurs : RFC 3711 B.3, puis les réponses de libsrtp reprises de tests/test_rtc_srtp.py.
+    // Vectors: RFC 3711 B.3, then libsrtp's answers taken from tests/test_rtc_srtp.py.
     @Test fun srtpKeyDerivationMatchesTheRfc() {
         val key = rtcHex("E1F97A0D3E018BE0D64FA32C06DE4139")
         val salt = rtcHex("0EC675AD498AFEEBB6960B3AABE6")
@@ -137,16 +137,16 @@ class RtcTest {
 
     @Test fun h264IsReassembledAndWaitsForAKeyframeAfterALoss() {
         val depacketizer = H264Depacketizer()
-        // Une image ordinaire avant toute image clé n'est pas montrée.
+        // An ordinary picture before any key frame is not shown.
         assertNull(depacketizer.push(video(1, byteArrayOf(0x41, 1), true)))
-        // SPS et PPS groupés (STAP-A), puis une image clé en deux fragments.
+        // SPS and PPS grouped (STAP-A), then a key frame in two fragments.
         assertNull(depacketizer.push(video(2, byteArrayOf(24, 0, 2, 0x67, 5, 0, 2, 0x68, 6), false)))
         assertNull(depacketizer.push(video(3, byteArrayOf(0x7C, 0x85.toByte(), 1, 2), false)))
         val unit = depacketizer.push(video(4, byteArrayOf(0x7C, 0x45, 3), true))!!
         assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x67, 5, 0, 0, 0, 1, 0x68, 6, 0, 0, 0, 1, 0x65, 1, 2, 3), unit)
         assertFalse(depacketizer.needsKeyframe)
         assertNotNull(depacketizer.push(video(5, byteArrayOf(0x41, 1), true)))
-        // Un paquet manque : plus rien jusqu'à la prochaine image clé.
+        // A packet is missing: nothing more until the next key frame.
         assertNull(depacketizer.push(video(7, byteArrayOf(0x41, 1), true)))
         assertTrue(depacketizer.needsKeyframe)
         assertNull(depacketizer.push(video(8, byteArrayOf(0x41, 1), true)))

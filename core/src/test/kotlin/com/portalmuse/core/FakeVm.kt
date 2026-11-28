@@ -6,7 +6,7 @@ import java.nio.ByteOrder
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
-/** Côté serveur du handshake Noise XX, pour les tests. */
+/** Server side of the Noise XX handshake, for tests. */
 class NoiseResponder {
     private val state = SymmetricState(ByteArray(0))
     private val ephemeral = X25519KeyPair.generate()
@@ -23,7 +23,7 @@ class NoiseResponder {
         return ephemeral.publicKey + encryptedStatic + state.encryptAndHash(ByteArray(0))
     }
 
-    /** Renvoie (réception, envoi) du point de vue du serveur. */
+    /** Returns (receive, send) from the server's point of view. */
     fun finish(message3: ByteArray): Pair<CipherState, CipherState> {
         val rs = state.decryptAndHash(message3.copyOfRange(0, 48))
         state.mixKey(X25519.dh(ephemeral, rs))
@@ -33,11 +33,11 @@ class NoiseResponder {
 }
 
 /**
- * VM Muse simulée derrière un [FrameSocket] : vrai handshake, vraies trames. [onMessage] reçoit
- * chaque message de contrôle de l'appareil et peut répondre avec [send].
+ * Simulated Muse VM behind a [FrameSocket]: real handshake, real frames. [onMessage] receives each control
+ * message from the device and can answer with [send].
  */
 class FakeVm(
-    /** Requête HTTP complète autre que le flux de contrôle. */
+    /** A complete HTTP request other than the control stream. */
     private val onRequest: FakeVm.(HttpCall) -> Unit = {},
     private val onMessage: FakeVm.(JSONObject) -> Unit = {},
 ) : FrameSocket {
@@ -49,7 +49,7 @@ class FakeVm(
     private val uploads = HashMap<Long, Triple<Pair<ServiceType, ServiceFrame.Request>, java.io.ByteArrayOutputStream, IntArray>>()
     val calls = LinkedBlockingQueue<HttpCall>()
     val resets = LinkedBlockingQueue<Long>()
-    /** Requêtes laissées ouvertes dans les deux sens (appel vocal), et leurs morceaux. */
+    /** Requests left open both ways (voice call), and their chunks. */
     val duplexOpened = LinkedBlockingQueue<HttpCall>()
     val duplexData = LinkedBlockingQueue<ServiceFrame.BodyChunk>()
     private var duplex = 0L

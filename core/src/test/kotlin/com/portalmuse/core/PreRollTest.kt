@@ -9,7 +9,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
 class PreRollTest {
-    /** Une source qu'on alimente à la main ; un morceau vide la termine. */
+    /** A source fed by hand; an empty chunk ends it. */
     private class Source {
         val queue = LinkedBlockingQueue<ByteArray>()
         fun next(): ByteArray? = queue.take().takeIf { it.isNotEmpty() }
@@ -71,7 +71,7 @@ class PreRollTest {
         fun pcm(vararg samples: Int) = ByteArray(samples.size * 2) { (samples[it / 2] shr (8 * (it % 2))).toByte() }
         assertArrayEquals(pcm(0, 200, 400, 600, 800, 900), Upsampler.to24k(pcm(0, 300, 600, 900)))
         assertArrayEquals(pcm(-3000, -3000, -3000), Upsampler.to24k(pcm(-3000, -3000)))
-        // 20 ms d'écoute deviennent 20 ms d'appel.
+        // 20 ms of listening become 20 ms of call.
         assertEquals(960, Upsampler.to24k(ByteArray(640)).size)
         assertEquals(1920, Upsampler.to24k(ByteArray(1280)).size)
     }

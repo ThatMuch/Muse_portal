@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.app.Activity
 import android.os.Handler
 import android.os.Looper
@@ -13,7 +14,7 @@ import android.widget.LinearLayout
 
 private const val IDLE_CLOSE_MS = 60_000L
 
-/** « Plus » : ce qu'on ouvre moins souvent, en grandes tuiles. */
+/** "More": what you open less often, as large tiles. */
 class HubPanel(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
     class Tile(val icon: Int, val label: String, val run: () -> Unit)
 
@@ -27,7 +28,10 @@ class HubPanel(private val activity: Activity, root: FrameLayout, private val on
         visibility = View.GONE
         addView(row, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.CENTER))
         addView(
-            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, "Fermer").apply { setOnClickListener { close() } },
+            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, tr(
+                "Close",
+                "Fermer",
+            )).apply { setOnClickListener { close() } },
             FrameLayout.LayoutParams(dp(64), dp(64), Gravity.TOP or Gravity.END)
                 .apply { setMargins(0, dp(40), dp(40), 0) },
         )

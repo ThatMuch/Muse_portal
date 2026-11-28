@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
@@ -27,18 +28,15 @@ private const val TAG = "PortalMuse"
 private const val CHANNEL = "gadget"
 private const val NOTIFICATION_ID = 1
 private const val PAIRING_WINDOW_MS = 10 * 60_000L
-/** Laisse au téléphone le temps de recevoir `auth_ok`. */
+/** Gives the phone time to receive `auth_ok`. */
 private const val CLOSE_AFTER_PAIRING_MS = 3_000L
 
-/**
- * Service au premier plan : il garde la session Muse ouverte, et ouvre à la demande la fenêtre
- * d'appairage BLE.
- */
+/** Foreground service: it keeps the Muse session open, and opens the BLE pairing window on demand. */
 @SuppressLint("MissingPermission")
 class GadgetService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private var peripheral: BlePeripheral? = null
-    private val timeout = Runnable { close("Fenêtre d'appairage expirée.") }
+    private val timeout = Runnable { close(tr("The pairing window expired.", "Fenêtre d'appairage expirée.")) }
     private var pairing = false
 
     private lateinit var muse: MuseLink
@@ -54,7 +52,10 @@ class GadgetService : Service() {
                 getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(status))
             },
             onRevoked = {
-                if (!pairing) PairingStatus.publish(false, "Muse a retiré cet appareil. Réappairer depuis le menu.")
+                if (!pairing) PairingStatus.publish(false, tr(
+                    "Muse removed this device. Pair again from the menu.",
+                    "Muse a retiré cet appareil. Réappairer depuis le menu.",
+                ))
             },
         )
         muse.start()
@@ -66,7 +67,7 @@ class GadgetService : Service() {
             ACTION_START_PAIRING -> if (!pairing) open()
             ACTION_STOP_PAIRING -> close(null)
             ACTION_PAIRING_CHANGED -> muse.pairingChanged()
-            // Sans intention : Android relance le service après la disparition du processus.
+            // No intent: Android restarts the service after the process disappeared.
             null -> KioskReturn.reopen(this)
         }
         return START_STICKY
@@ -79,28 +80,40 @@ class GadgetService : Service() {
     }
 
     private fun open() {
-        // L'app Muse refuse un gadget sans jeton SDK.
+        // The Muse app refuses a gadget without an SDK token.
         val sdkToken = SecretStore(this).sdkToken?.takeIf(SdkToken::isValid)
-            ?: return close("Saisir d'abord le jeton SDK Muse (menu de maintenance).")
+            ?: return close(tr(
+                "Enter the Muse SDK token first (maintenance menu).",
+                "Saisir d'abord le jeton SDK Muse (menu de maintenance).",
+            ))
         val adapter = getSystemService(BluetoothManager::class.java).adapter
-        if (adapter == null || !adapter.isEnabled) return close("Bluetooth désactivé sur le Portal.")
+        if (adapter == null || !adapter.isEnabled) return close(tr(
+            "Bluetooth is off on the Portal.",
+            "Bluetooth désactivé sur le Portal.",
+        ))
         val settings = Settings(this)
         val name = settings.identity().bleName
         pairing = true
-        PairingStatus.publish(true, "Ouverture de l'appairage…")
-        // L'app Muse reconnaît le gadget à son nom Bluetooth : on le change le temps de l'appairage.
+        PairingStatus.publish(true, tr("Opening pairing…", "Ouverture de l'appairage…"))
+        // The Muse app recognizes the gadget by its Bluetooth name: it is changed for the time of pairing.
         if (adapter.name != name) {
             if (settings.savedBluetoothName == null) settings.savedBluetoothName = adapter.name
-            if (!adapter.setName(name)) return close("Impossible de changer le nom Bluetooth.")
+            if (!adapter.setName(name)) return close(tr(
+                "Could not change the Bluetooth name.",
+                "Impossible de changer le nom Bluetooth.",
+            ))
         }
         main.postDelayed(timeout, PAIRING_WINDOW_MS)
         awaitName(adapter, name, sdkToken, attempts = 30)
     }
 
-    /** Le changement de nom est asynchrone : l'annonce attend qu'il soit effectif. */
+    /** The name change is asynchronous: advertising waits until it takes effect. */
     private fun awaitName(adapter: BluetoothAdapter, name: String, sdkToken: String, attempts: Int) {
         if (adapter.name == name) return startPeripheral(name, sdkToken)
-        if (attempts == 0) return close("Le nom Bluetooth n'a pas changé.")
+        if (attempts == 0) return close(tr(
+            "The Bluetooth name did not change.",
+            "Le nom Bluetooth n'a pas changé.",
+        ))
         main.postDelayed({ awaitName(adapter, name, sdkToken, attempts - 1) }, 100)
     }
 
@@ -111,8 +124,14 @@ class GadgetService : Service() {
         val version = packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
         val created = BlePeripheral(
             this,
-            onState = { state -> PairingStatus.publish(true, "Appairage ouvert : $name ($state)") },
-            onFailure = { reason -> main.post { close("Appairage impossible : $reason.") } },
+            onState = { state -> PairingStatus.publish(true, tr(
+                "Pairing open: $name ($state)",
+                "Appairage ouvert : $name ($state)",
+            )) },
+            onFailure = { reason -> main.post { close(tr(
+                "Pairing failed: $reason.",
+                "Appairage impossible : $reason.",
+            )) } },
         )
         peripheral = created
         val controller = SetupController(
@@ -125,7 +144,7 @@ class GadgetService : Service() {
                 val api = try {
                     MuseHttp.api(this)
                 } catch (e: Exception) {
-                    Log.e(TAG, "TLS indisponible : ${e.javaClass.simpleName}")
+                    Log.e(TAG, "TLS unavailable: ${e.javaClass.simpleName}")
                     throw ProvisionFailed("auth_failed")
                 }
                 MuseProvisioning.verifyAndSave(
@@ -137,7 +156,10 @@ class GadgetService : Service() {
             },
             onComplete = {
                 muse.pairingChanged()
-                main.postDelayed({ close("Portal appairé avec Muse.") }, CLOSE_AFTER_PAIRING_MS)
+                main.postDelayed({ close(tr(
+                    "The Portal is paired with Muse.",
+                    "Portal appairé avec Muse.",
+                )) }, CLOSE_AFTER_PAIRING_MS)
             },
             log = { Log.i(TAG, it) },
         )
@@ -153,19 +175,19 @@ class GadgetService : Service() {
     }
 
     private fun close(reason: String?) {
-        Log.i(TAG, "appairage fermé${reason?.let { " : $it" } ?: ""}")
+        Log.i(TAG, "pairing closed${reason?.let { ": $it" } ?: ""}")
         release()
         PairingStatus.publish(false, reason)
     }
 
     private fun notification(status: String): Notification {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Gadget Muse", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL, tr("Muse gadget", "Gadget Muse"), NotificationManager.IMPORTANCE_LOW),
         )
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentTitle("Portal Muse")
-            .setContentText("Session Muse : $status")
+            .setContentText(tr("Muse session: $status", "Session Muse : $status"))
             .setOnlyAlertOnce(true)
             .build()
     }
@@ -185,7 +207,7 @@ class GadgetService : Service() {
     }
 }
 
-/** Le Portal est déjà en ligne : on ne propose que la connexion actuelle. */
+/** The Portal is already online: only the current connection is offered. */
 private class AndroidNetwork(private val context: Context) : SetupNetwork {
     override fun isOnline(): Boolean {
         val manager = context.getSystemService(ConnectivityManager::class.java)

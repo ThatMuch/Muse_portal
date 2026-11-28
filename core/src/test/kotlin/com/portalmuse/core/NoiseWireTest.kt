@@ -8,7 +8,7 @@ import org.junit.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Octets produits par le code Python du SDK (core/src/test/tools/noise_wire_vectors.py). */
+/** Bytes produced by the SDK's Python code (core/src/test/tools/noise_wire_vectors.py). */
 class NoiseWireTest {
     private val vectors = resource("noise_wire_sdk.json")
     private fun vector(name: String) = vectors.getString(name)

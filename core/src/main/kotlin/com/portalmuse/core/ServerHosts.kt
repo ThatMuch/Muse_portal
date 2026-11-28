@@ -1,10 +1,10 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/server_hosts.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/server_hosts.py
 package com.portalmuse.core
 
 /**
- * Les seuls serveurs auxquels l'appareil envoie ses jetons : ceux que l'app Muse transmet,
- * à l'identique. Rien n'est configurable. Une valeur vide désigne la valeur par défaut.
+ * The only servers the device sends its tokens to: those the Muse app passes, as is. Nothing is configurable.
+ * An empty value means the default.
  */
 object ServerHosts {
     val API_URLS = listOf("https://api.muse.ai", "https://hatch-api.meta.ai")

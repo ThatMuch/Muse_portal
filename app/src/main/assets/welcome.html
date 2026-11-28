@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,7 +14,7 @@
   [hidden] { display: none !important; }
   svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 
-  /* Noir et beaucoup d'air. En bas à droite, la place reste au bouton d'appel de l'application. */
+  /* Black, with plenty of room. The bottom right corner is left to the app's call button. */
   main { height: 100%; display: flex; flex-direction: column; padding: 48px 64px 0; }
   .hero { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: space-between; gap: 40px; }
   #time { font-size: min(17vw, 27vh); font-weight: 200; line-height: 0.95; letter-spacing: -0.03em;
@@ -32,7 +32,7 @@
             text-underline-offset: 6px; text-decoration-color: #3a3a3c; }
 
   .muse { width: min(30vw, 46vh); display: flex; flex-direction: column; align-items: center; gap: 10px; }
-  /* Le bas de la vidéo se fond dans le noir : le personnage n'est pas coupé net. */
+  /* The bottom of the video fades into black, so the character is not cut off sharply. */
   #avatar { width: 100%; aspect-ratio: 1; object-fit: cover;
             -webkit-mask-image: linear-gradient(#000 82%, transparent); }
   #listening { font-size: 17px; color: #636366; }
@@ -87,16 +87,16 @@
     <div>
       <div id="time">--:--</div>
       <div id="date"></div>
-      <button id="now" type="button" hidden aria-label="Changer de ville">
+      <button id="now" type="button" hidden aria-label="Change city" data-fr-label="Changer de ville">
         <div class="line"><span id="icon"></span><span id="temperature"></span><span id="condition"></span></div>
         <div id="details"></div>
       </button>
-      <button id="choose" type="button" hidden>Ajouter la météo</button>
+      <button id="choose" type="button" hidden data-fr="Ajouter la météo">Add the weather</button>
       <div id="timers" hidden></div>
     </div>
     <div class="muse">
       <video id="avatar" hidden muted loop autoplay playsinline disableremoteplayback></video>
-      <div id="listening" hidden>Dites « Hey Muse »</div>
+      <div id="listening" hidden data-fr="Dites « Hey Muse »">Say “Hey Muse”</div>
     </div>
   </section>
   <section id="days"></section>
@@ -104,40 +104,50 @@
 </main>
 
 <div id="picker" hidden>
-  <h1>Ville pour la météo</h1>
+  <h1 data-fr="Ville pour la météo">Weather city</h1>
   <form id="search">
-    <input id="query" type="search" placeholder="Nom de la ville" autocomplete="off" maxlength="80">
-    <button class="action" type="submit">Chercher</button>
+    <input id="query" type="search" placeholder="City name" data-fr-placeholder="Nom de la ville" autocomplete="off" maxlength="80">
+    <button class="action" type="submit" data-fr="Chercher">Search</button>
   </form>
   <p id="message"></p>
   <div id="results"></div>
   <div class="buttons">
-    <button class="action" id="cancel" type="button">Annuler</button>
-    <button class="action" id="remove" type="button">Retirer la météo</button>
+    <button class="action" id="cancel" type="button" data-fr="Annuler">Cancel</button>
+    <button class="action" id="remove" type="button" data-fr="Retirer la météo">Remove the weather</button>
   </div>
 </div>
 
 <script>
 "use strict";
+// French on a French device, English everywhere else, like the app.
+const french = (navigator.language || "").startsWith("fr");
+const t = (english, frenchText) => french ? frenchText : english;
+const LOCALE = french ? "fr-FR" : navigator.language || "en-US";
+if (french) {
+  document.documentElement.lang = "fr";
+  for (const node of document.querySelectorAll("[data-fr]")) node.textContent = node.dataset.fr;
+  for (const node of document.querySelectorAll("[data-fr-label]")) node.setAttribute("aria-label", node.dataset.frLabel);
+  for (const node of document.querySelectorAll("[data-fr-placeholder]")) node.placeholder = node.dataset.frPlaceholder;
+}
 const PLACE_KEY = "meteo.ville";
 const REFRESH_MS = 15 * 60 * 1000;
 const RETRY_MS = 60 * 1000;
-// Codes météo de l'OMM, tels que les renvoie Open-Meteo : [libellé, dessin de jour, dessin de nuit].
+// WMO weather codes, as returned by Open-Meteo: [label, day drawing, night drawing].
 const CODES = {
-  0: ["Ciel dégagé", "sun", "moon"], 1: ["Plutôt dégagé", "partly", "night"],
-  2: ["Partiellement nuageux", "partly", "night"], 3: ["Couvert", "cloud"],
-  45: ["Brouillard", "fog"], 48: ["Brouillard givrant", "fog"],
-  51: ["Bruine légère", "drizzle"], 53: ["Bruine", "drizzle"], 55: ["Forte bruine", "rain"],
-  56: ["Bruine verglaçante", "rain"], 57: ["Bruine verglaçante", "rain"],
-  61: ["Pluie faible", "drizzle"], 63: ["Pluie", "rain"], 65: ["Forte pluie", "rain"],
-  66: ["Pluie verglaçante", "rain"], 67: ["Pluie verglaçante", "rain"],
-  71: ["Neige faible", "snow"], 73: ["Neige", "snow"], 75: ["Fortes chutes de neige", "snow"],
-  77: ["Grains de neige", "snow"], 80: ["Averses", "drizzle"], 81: ["Averses", "rain"], 82: ["Fortes averses", "storm"],
-  85: ["Averses de neige", "snow"], 86: ["Averses de neige", "snow"],
-  95: ["Orage", "storm"], 96: ["Orage avec grêle", "storm"], 99: ["Orage avec grêle", "storm"],
+  0: [t("Clear sky", "Ciel dégagé"), "sun", "moon"], 1: [t("Mostly clear", "Plutôt dégagé"), "partly", "night"],
+  2: [t("Partly cloudy", "Partiellement nuageux"), "partly", "night"], 3: [t("Overcast", "Couvert"), "cloud"],
+  45: [t("Fog", "Brouillard"), "fog"], 48: [t("Freezing fog", "Brouillard givrant"), "fog"],
+  51: [t("Light drizzle", "Bruine légère"), "drizzle"], 53: [t("Drizzle", "Bruine"), "drizzle"], 55: [t("Heavy drizzle", "Forte bruine"), "rain"],
+  56: [t("Freezing drizzle", "Bruine verglaçante"), "rain"], 57: [t("Freezing drizzle", "Bruine verglaçante"), "rain"],
+  61: [t("Light rain", "Pluie faible"), "drizzle"], 63: [t("Rain", "Pluie"), "rain"], 65: [t("Heavy rain", "Forte pluie"), "rain"],
+  66: [t("Freezing rain", "Pluie verglaçante"), "rain"], 67: [t("Freezing rain", "Pluie verglaçante"), "rain"],
+  71: [t("Light snow", "Neige faible"), "snow"], 73: [t("Snow", "Neige"), "snow"], 75: [t("Heavy snow", "Fortes chutes de neige"), "snow"],
+  77: [t("Snow grains", "Grains de neige"), "snow"], 80: [t("Showers", "Averses"), "drizzle"], 81: [t("Showers", "Averses"), "rain"], 82: [t("Heavy showers", "Fortes averses"), "storm"],
+  85: [t("Snow showers", "Averses de neige"), "snow"], 86: [t("Snow showers", "Averses de neige"), "snow"],
+  95: [t("Thunderstorm", "Orage"), "storm"], 96: [t("Thunderstorm with hail", "Orage avec grêle"), "storm"], 99: [t("Thunderstorm with hail", "Orage avec grêle"), "storm"],
 };
 
-// Dessins au trait, dans un carré de 24.
+// Line drawings, in a 24 square.
 const HIGH_CLOUD = '<path d="M7 15h10.5a3.5 3.5 0 0 0 .4-6.98A6 6 0 0 0 6.2 7.5 3.8 3.8 0 0 0 7 15z"/>';
 const ICONS = {
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
@@ -166,8 +176,8 @@ let request = 0;
 
 function tick() {
   const now = new Date();
-  byId("time").textContent = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  byId("date").textContent = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  byId("time").textContent = now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  byId("date").textContent = now.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
   setTimeout(tick, 1000 - now.getMilliseconds());
 }
 
@@ -206,15 +216,15 @@ function render(data, place) {
   byId("icon").replaceChildren(drawing(sky.icon));
   byId("temperature").textContent = degrees(current.temperature_2m);
   byId("condition").textContent = sky.label;
-  byId("details").textContent = place.name + " · ressenti " + degrees(current.apparent_temperature) +
-    " · vent " + Math.round(current.wind_speed_10m) + " km/h";
+  byId("details").textContent = place.name + t(" · feels like ", " · ressenti ") + degrees(current.apparent_temperature) +
+    t(" · wind ", " · vent ") + Math.round(current.wind_speed_10m) + " km/h";
   byId("now").hidden = false;
 
   const daily = data.daily;
   byId("days").replaceChildren(...daily.time.map((iso, i) => {
     const card = element("div", "day", "");
-    const name = i === 0 ? "Aujourd'hui" :
-      new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" });
+    const name = i === 0 ? t("Today", "Aujourd'hui") :
+      new Date(iso + "T12:00:00").toLocaleDateString(LOCALE, { weekday: "long" });
     const range = element("div", "range", degrees(daily.temperature_2m_max[i]));
     range.append(element("span", "low", degrees(daily.temperature_2m_min[i])));
     card.append(element("div", "name", name), drawing(describe(daily.weather_code[i], true).icon), range);
@@ -244,21 +254,23 @@ async function refresh() {
     if (mine !== request) return;
     render(data, place);
     lastSuccess = new Date();
-    byId("status").textContent = "Météo : Open-Meteo.com";
+    byId("status").textContent = t("Weather: Open-Meteo.com", "Météo : Open-Meteo.com");
   } catch (error) {
     if (mine !== request) return;
     console.warn("meteo", String(error));
     delay = RETRY_MS;
     byId("status").textContent = lastSuccess
-      ? "Météo non actualisée depuis " + lastSuccess.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-      : "Météo indisponible, nouvel essai dans une minute";
+      ? t("Weather not updated since ", "Météo non actualisée depuis ") +
+        lastSuccess.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      : t("Weather unavailable, trying again in a minute", "Météo indisponible, nouvel essai dans une minute");
   }
   refreshTimer = setTimeout(refresh, delay);
 }
 
 function openPicker() {
   byId("results").replaceChildren();
-  byId("message").textContent = "Seule la position de la ville choisie est envoyée au service météo.";
+  byId("message").textContent = t("Only the position of the chosen city is sent to the weather service.",
+    "Seule la position de la ville choisie est envoyée au service météo.");
   byId("query").value = "";
   byId("remove").hidden = loadPlace() === null;
   byId("picker").hidden = false;
@@ -286,12 +298,13 @@ byId("search").addEventListener("submit", async (event) => {
   if (name.length < 2) return;
   byId("query").blur();
   byId("results").replaceChildren();
-  byId("message").textContent = "Recherche…";
+  byId("message").textContent = t("Searching…", "Recherche…");
   try {
     const url = "https://geocoding-api.open-meteo.com/v1/search?" +
-      new URLSearchParams({ name, count: 5, language: "fr", format: "json" });
+      new URLSearchParams({ name, count: 5, language: french ? "fr" : "en", format: "json" });
     const found = (await getJson(url)).results || [];
-    byId("message").textContent = found.length ? "Toucher la bonne ville." : "Aucune ville trouvée.";
+    byId("message").textContent = found.length ? t("Touch the right city.", "Toucher la bonne ville.")
+      : t("No city found.", "Aucune ville trouvée.");
     byId("results").replaceChildren(...found.map((city) => {
       const label = [city.name, city.admin1, city.country].filter(Boolean).join(", ");
       const button = element("button", "", label);
@@ -303,11 +316,11 @@ byId("search").addEventListener("submit", async (event) => {
     }));
   } catch (error) {
     console.warn("recherche", String(error));
-    byId("message").textContent = "Recherche impossible. Vérifier la connexion.";
+    byId("message").textContent = t("Search failed. Check the connection.", "Recherche impossible. Vérifier la connexion.");
   }
 });
 
-// Les minuteurs : le décompte est affiché ici, un toucher demande à l'application d'annuler.
+// Timers: the countdown is shown here, a touch asks the app to cancel.
 let timers = [];
 function drawTimers() {
   const box = byId("timers");
@@ -318,7 +331,7 @@ function drawTimers() {
       ":" + String(left % 60).padStart(2, "0");
     const chip = element("button", "", "");
     chip.type = "button";
-    chip.setAttribute("aria-label", "Annuler le minuteur");
+    chip.setAttribute("aria-label", t("Cancel the timer", "Annuler le minuteur"));
     chip.append(element("b", "", clock), element("span", "", (timer.label ? timer.label + "  " : "") + "✕"));
     chip.addEventListener("click", () => { location.href = "portal-timer:" + timer.id; });
     return chip;
@@ -327,13 +340,13 @@ function drawTimers() {
   document.body.classList.toggle("has-timers", timers.length > 0);
 }
 window.setTimers = (list) => { timers = list; drawTimers(); };
-// Redessiné seulement quand il y en a : un toucher n'est pas perdu entre deux dessins.
+// Redrawn only when there are some: a touch is not lost between two redraws.
 setInterval(() => { if (timers.length && !document.hidden) drawTimers(); }, 1000);
 
 window.setListening = (listening) => { byId("listening").hidden = !listening; };
 
-// Appelées par l'application, qui fournit l'avatar et les boutons d'actions rapides. Un toucher
-// lui est signalé par une adresse qu'elle intercepte ; elle seule connaît le message à envoyer.
+// Called by the app, which provides the avatar and the quick action buttons. A touch is reported to it
+// through an address it intercepts; only the app knows the message to send.
 window.setShortcuts = (labels) => {
   const bar = byId("shortcuts");
   bar.replaceChildren(...labels.map((label, index) => {
@@ -364,7 +377,7 @@ byId("choose").addEventListener("click", openPicker);
 byId("now").addEventListener("click", openPicker);
 byId("cancel").addEventListener("click", closePicker);
 byId("remove").addEventListener("click", () => choose(null));
-// Au réveil de l'écran, les minuteries ont pu s'arrêter.
+// When the screen wakes up, timers may have stopped.
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 window.addEventListener("online", refresh);
 

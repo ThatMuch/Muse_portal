@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
@@ -23,8 +24,8 @@ private const val EXPIRES_MS = 90_000L
 private const val COUNTDOWN = 3
 
 /**
- * Une photo, en deux gestes : « Prendre la photo » après avoir vu l'image en direct, puis
- * « Envoyer » après avoir vu la photo. Sans réponse, rien ne part.
+ * A photo, in two gestures: "Take the photo" after seeing the live picture, then "Send" after seeing the photo.
+ * Without an answer, nothing is sent.
  */
 class PhotoPanel(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
@@ -55,10 +56,22 @@ class PhotoPanel(private val activity: Activity, root: FrameLayout, private val 
         gravity = Gravity.CENTER
         setShadowLayer(16f, 0f, 0f, 0xFF000000.toInt())
     }
-    private val shutter = Ui.pill(activity, "Prendre la photo", Ui.ACCENT).apply { setOnClickListener { start() } }
-    private val turn = Ui.pill(activity, "Pivoter", Ui.SURFACE).apply { setOnClickListener { rotate() } }
-    private val again = Ui.pill(activity, "Recommencer", Ui.SURFACE).apply { setOnClickListener { live() } }
-    private val send = Ui.pill(activity, "Envoyer", Ui.CALL).apply { setOnClickListener { confirm() } }
+    private val shutter = Ui.pill(activity, tr(
+        "Take the photo",
+        "Prendre la photo",
+    ), Ui.ACCENT).apply { setOnClickListener { start() } }
+    private val turn = Ui.pill(activity, tr(
+        "Rotate",
+        "Pivoter",
+    ), Ui.SURFACE).apply { setOnClickListener { rotate() } }
+    private val again = Ui.pill(activity, tr(
+        "Retake",
+        "Recommencer",
+    ), Ui.SURFACE).apply { setOnClickListener { live() } }
+    private val send = Ui.pill(activity, tr(
+        "Send",
+        "Envoyer",
+    ), Ui.CALL).apply { setOnClickListener { confirm() } }
 
     private val panel = FrameLayout(activity).apply {
         setBackgroundColor(Ui.PANEL)
@@ -80,7 +93,7 @@ class PhotoPanel(private val activity: Activity, root: FrameLayout, private val 
                 .apply { setMargins(dp(48), dp(40), 0, 0) },
         )
         addView(
-            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, "Ne rien envoyer").apply {
+            Ui.round(activity, R.drawable.ic_close, Ui.SURFACE, tr("Send nothing", "Ne rien envoyer")).apply {
                 setOnClickListener { finish(PhotoResult.Declined) }
             },
             FrameLayout.LayoutParams(dp(64), dp(64), Gravity.TOP or Gravity.END)
@@ -98,7 +111,7 @@ class PhotoPanel(private val activity: Activity, root: FrameLayout, private val 
 
     val isOpen get() = panel.visibility == View.VISIBLE
 
-    /** Faux si une photo est déjà en cours. [onReply] est appelé une seule fois. */
+    /** False if a photo is already in progress. [onReply] is called exactly once. */
     fun ask(heading: String, reason: String?, onReply: (PhotoResult) -> Unit): Boolean {
         if (reply != null) return false
         if (activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -125,7 +138,7 @@ class PhotoPanel(private val activity: Activity, root: FrameLayout, private val 
         return true
     }
 
-    /** Ferme sans rien envoyer. */
+    /** Closes without sending anything. */
     fun cancel() {
         if (reply != null) finish(PhotoResult.Declined)
     }
@@ -163,11 +176,11 @@ class PhotoPanel(private val activity: Activity, root: FrameLayout, private val 
         val taken = photo ?: return
         val out = ByteArrayOutputStream()
         taken.compress(Bitmap.CompressFormat.JPEG, 82, out)
-        Log.i(TAG, "photo : envoi de ${out.size() / 1024} Ko approuvé à l'écran")
+        Log.i(TAG, "photo: sending ${out.size() / 1024} KB approved on screen")
         finish(PhotoResult.Taken(out.toByteArray()))
     }
 
-    /** [live] : aperçu, photo prise, ou ni l'un ni l'autre pendant le décompte. */
+    /** [live]: preview, photo taken, or neither during the countdown. */
     private fun buttons(live: Boolean?) {
         shutter.visibility = if (live == true) View.VISIBLE else View.GONE
         turn.visibility = shutter.visibility
@@ -182,8 +195,11 @@ class PhotoPanel(private val activity: Activity, root: FrameLayout, private val 
 
     private fun failed(reason: String) {
         if (reply == null) return
-        Log.w(TAG, "photo : $reason")
-        Toast.makeText(activity, "Photo impossible : $reason.", Toast.LENGTH_LONG).show()
+        Log.w(TAG, "photo: $reason")
+        Toast.makeText(activity, tr(
+            "Photo failed: $reason.",
+            "Photo impossible : $reason.",
+        ), Toast.LENGTH_LONG).show()
         finish(PhotoResult.Unavailable("the camera is unavailable"))
     }
 

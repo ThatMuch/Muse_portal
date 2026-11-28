@@ -37,7 +37,7 @@ class VideoCallTest {
         executor.shutdownNow()
     }
 
-    /** Un point d'accès média sur la boucle locale : répond à ICE, puis envoie voix et image. */
+    /** A media endpoint on the loopback: answers ICE, then sends voice and picture. */
     private class Edge {
         val socket = DatagramSocket(0, InetAddress.getLoopbackAddress())
         @Volatile var key: ByteArray? = null
@@ -63,7 +63,7 @@ class VideoCallTest {
                         .put(data, 8, 12).array()
                     val mac = Mac.getInstance("HmacSHA1").apply { init(SecretKeySpec(password.toByteArray(), "HmacSHA1")) }
                     reply(header + byteArrayOf(0, 8, 0, 20) + mac.doFinal(header))
-                    // La désignation du chemin porte l'attribut « USE-CANDIDATE ».
+                    // Nominating the path carries the "USE-CANDIDATE" attribute.
                     val nominated = (20 until data.size - 3 step 4).any { data[it] == 0.toByte() && data[it + 1] == 0x25.toByte() }
                     if (nominated && !sent) {
                         sent = true
@@ -71,7 +71,7 @@ class VideoCallTest {
                         val picture = Rtp.build(127, 1, 0, 201, byteArrayOf(0x65, 4, 2)).also { it[1] = (127 or 0x80).toByte() }
                         reply(sender.protectRtp(picture))
                         if (speak) for (i in 1..3) reply(sender.protectRtp(Rtp.build(111, i, i * 960L, 200, byteArrayOf(i.toByte()))))
-                        // Un paquet renvoyé avec notre propre SSRC est écarté.
+                        // A packet sent back with our own SSRC is discarded.
                         reply(sender.protectRtp(Rtp.build(111, 9, 0, 100, byteArrayOf(99))))
                     }
                 } else if (!Rtp.isRtcp(data)) {
@@ -90,7 +90,7 @@ class VideoCallTest {
             return if (capturing) ByteArray(1920) { level } else null
         }
         override fun encode(pcm: ByteArray) = listOf(byteArrayOf(pcm[0], 42))
-        /** Un son fort, pour couper le micro. */
+        /** A loud sound, to mute the microphone. */
         override fun decode(opus: ByteArray): ByteArray {
             played.add(opus[0])
             return ByteArray(1920) { if (it % 2 == 0) 0 else 40 }
@@ -172,7 +172,7 @@ class VideoCallTest {
         return Started(call, CompletableFuture.supplyAsync({ call.run() }, executor), audio, pictures)
     }
 
-    /** Les prochaines requêtes, hors abonnement à la conversation. */
+    /** The next requests, apart from the conversation subscription. */
     private fun FakeVm.paths(count: Int) = generateSequence { calls.poll(5, TimeUnit.SECONDS)!! }
         .filter { it.path != "/chat/subscribe" }.take(count).toList()
 
@@ -185,7 +185,7 @@ class VideoCallTest {
         assertEquals("video", body.getString("call_media_type"))
         assertEquals("homelink-abcdef", body.getString("device_id"))
         assertArrayEquals(byteArrayOf(0, 0, 0, 1, 0x65, 4, 2), run.pictures.poll(5, TimeUnit.SECONDS))
-        // Pendant que Muse parle, du silence ; ensuite, le micro.
+        // While Muse speaks, silence; then the microphone.
         val sent = generateSequence { edge.heard.poll(3, TimeUnit.SECONDS)?.get(0) }.take(60).toList()
         assertTrue("silence pendant la voix de Muse : $sent", 0.toByte() in sent)
         assertEquals("micro rétabli", 1.toByte(), sent.last())
@@ -216,7 +216,7 @@ class VideoCallTest {
         assertEquals(CallResult.Ended(CallEnd.IDLE), run.result())
     }
 
-    /** Une transcription relayée par la conversation, le JSON rangé dans une chaîne. */
+    /** A transcription relayed by the conversation, the JSON stored in a string. */
     private fun heard(phrase: String, asMessage: Boolean = false) = FakeVm(
         onRequest = { call ->
             fun result(value: JSONObject) = sendFrame(
@@ -237,7 +237,7 @@ class VideoCallTest {
                         JSONObject().put("type", "event").put("event", "hatch.voice.realtime_event")
                             .put("payload", JSONObject().put("data", inner.toString()))
                     }
-                    // Après qu'on a parlé devant l'appareil.
+                    // After someone spoke in front of the device.
                     thread {
                         Thread.sleep(400)
                         sendFrame(ServiceFrame.BodyChunk(call.streamId, "$event\n".toByteArray()))

@@ -17,7 +17,7 @@ SDK's Python code with the scripts in core/src/test/tools.
 Some icons in app/src/main/res/drawable use paths from Google's Material Icons
 (Apache License 2.0).
 
-Downloaded by tools/preparer-reveil.sh and not included: ExecuTorch (BSD 3-Clause),
+Downloaded by tools/prepare-wakeword.sh and not included: ExecuTorch (BSD 3-Clause),
 esp-nn (Apache 2.0), esp-micro-speech-features (Apache 2.0).
 
 Weather data on the home screen comes from Open-Meteo.com.

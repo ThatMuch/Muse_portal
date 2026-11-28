@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/rtc/srtp.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/rtc/srtp.py
 package com.portalmuse.core.rtc
 
 import java.nio.ByteBuffer
@@ -16,8 +16,8 @@ private const val WINDOW = 64
 class SrtpError(message: String) : Exception(message)
 
 /**
- * SRTP et SRTCP en AES_CM_128_HMAC_SHA1_80 (RFC 3711), avec la clé maîtresse de 30 octets du
- * JOIN pour les deux sens ; les flux se distinguent par leur SSRC.
+ * SRTP and SRTCP with AES_CM_128_HMAC_SHA1_80 (RFC 3711), with the JOIN's 30 byte master key for both
+ * directions; streams are told apart by their SSRC.
  */
 class Srtp(keyAndSalt: ByteArray) {
     private class Keys(masterKey: ByteArray, masterSalt: ByteArray, label: Int) {
@@ -26,7 +26,7 @@ class Srtp(keyAndSalt: ByteArray) {
         val salt = derive(masterKey, masterSalt, label + 2, 14)
     }
 
-    /** RFC 3711, 3.3.2 : refuse un paquet déjà vu ou vieux de plus de 64. */
+    /** RFC 3711, 3.3.2: rejects a packet already seen or more than 64 old. */
     private class Replay {
         private var top = -1L
         private var seen = 0L
@@ -45,7 +45,7 @@ class Srtp(keyAndSalt: ByteArray) {
                 else -> {
                     val behind = top - index
                     if (behind >= WINDOW || (seen ushr behind.toInt()) and 1L == 1L) {
-                        throw SrtpError("paquet SRTP rejoué ou périmé")
+                        throw SrtpError("replayed or stale SRTP packet")
                     }
                     seen = seen or (1L shl behind.toInt())
                 }
@@ -64,16 +64,16 @@ class Srtp(keyAndSalt: ByteArray) {
     private val rtcpReplay = HashMap<Int, Replay>()
 
     init {
-        if (keyAndSalt.size != 30) throw SrtpError("la clé SRTP doit faire 30 octets")
+        if (keyAndSalt.size != 30) throw SrtpError("the SRTP key must be 30 bytes")
         val key = keyAndSalt.copyOfRange(0, 16)
         val salt = keyAndSalt.copyOfRange(16, 30)
         rtp = Keys(key, salt, 0)
         rtcp = Keys(key, salt, 3)
     }
 
-    /** Chiffre ou déchiffre les octets à partir de [from], en mode compteur. */
+    /** Encrypts or decrypts the bytes from [from], in counter mode. */
     private fun crypt(keys: Keys, ssrc: Int, index: Long, packet: ByteArray, from: Int): ByteArray {
-        // IV = sel × 2^16, xor SSRC × 2^64, xor index × 2^16.
+        // IV = salt × 2^16, xor SSRC × 2^64, xor index × 2^16.
         val iv = keys.salt.copyOf(16)
         for (i in 0 until 4) iv[4 + i] = (iv[4 + i].toInt() xor (ssrc ushr (24 - 8 * i))).toByte()
         for (i in 0 until 6) iv[8 + i] = (iv[8 + i].toInt() xor (index ushr (40 - 8 * i)).toInt()).toByte()
@@ -93,18 +93,18 @@ class Srtp(keyAndSalt: ByteArray) {
     private fun int(value: Long) = ByteBuffer.allocate(4).putInt(value.toInt()).array()
 
     private fun headerLength(packet: ByteArray, size: Int): Int {
-        if (size < 12) throw SrtpError("paquet RTP trop court")
+        if (size < 12) throw SrtpError("RTP packet too short")
         var length = 12 + 4 * (packet[0].toInt() and 0x0F)
         if (packet[0].toInt() and 0x10 != 0) {
-            if (size < length + 4) throw SrtpError("extension RTP trop courte")
+            if (size < length + 4) throw SrtpError("RTP extension too short")
             length += 4 + 4 * (ByteBuffer.wrap(packet).getShort(length + 2).toInt() and 0xFFFF)
         }
-        if (size < length) throw SrtpError("en-tête RTP trop court")
+        if (size < length) throw SrtpError("RTP header too short")
         return length
     }
 
     private fun <T> bounded(map: HashMap<Int, T>, ssrc: Int, create: () -> T): T = map[ssrc] ?: create().also {
-        if (map.size >= MAX_STREAMS) throw SrtpError("trop de flux SRTP")
+        if (map.size >= MAX_STREAMS) throw SrtpError("too many SRTP streams")
         map[ssrc] = it
     }
 
@@ -124,7 +124,7 @@ class Srtp(keyAndSalt: ByteArray) {
 
     @Synchronized
     fun unprotectRtp(packet: ByteArray): ByteArray {
-        if (packet.size < 12 + TAG_LENGTH) throw SrtpError("paquet SRTP trop court")
+        if (packet.size < 12 + TAG_LENGTH) throw SrtpError("SRTP packet too short")
         val body = packet.copyOf(packet.size - TAG_LENGTH)
         val header = headerLength(body, body.size)
         val buffer = ByteBuffer.wrap(body)
@@ -138,7 +138,7 @@ class Srtp(keyAndSalt: ByteArray) {
             guess = (guess + 1) and 0xFFFFFFFFL
         }
         if (!MessageDigest.isEqual(tag(rtp, body, int(guess)), packet.copyOfRange(body.size, packet.size))) {
-            throw SrtpError("paquet SRTP non authentique")
+            throw SrtpError("SRTP packet not authentic")
         }
         bounded(rtpReplay, ssrc, ::Replay).check((guess shl 16) or sequence.toLong())
         val newer = guess == previous.counter && sequence > previous.last ||
@@ -149,9 +149,9 @@ class Srtp(keyAndSalt: ByteArray) {
 
     @Synchronized
     fun protectRtcp(packet: ByteArray): ByteArray {
-        if (packet.size < 8) throw SrtpError("paquet RTCP trop court")
+        if (packet.size < 8) throw SrtpError("RTCP packet too short")
         val ssrc = ByteBuffer.wrap(packet).getInt(4)
-        // Comme libsrtp, le premier index SRTCP envoyé est 1.
+        // Like libsrtp, the first SRTCP index sent is 1.
         val index = ((sentControl[ssrc] ?: 0) + 1) and 0x7FFFFFFF
         sentControl[ssrc] = index
         val body = crypt(rtcp, ssrc, index.toLong(), packet, 8) + int(0x80000000L or index.toLong())
@@ -160,7 +160,7 @@ class Srtp(keyAndSalt: ByteArray) {
 
     companion object {
         internal fun derive(masterKey: ByteArray, masterSalt: ByteArray, label: Int, length: Int): ByteArray {
-            // x = sel xor (label × 2^48), puis la suite de chiffrement à partir de x × 2^16.
+            // x = salt xor (label × 2^48), then the keystream from x × 2^16.
             val iv = masterSalt.copyOf(16)
             iv[7] = (iv[7].toInt() xor label).toByte()
             val cipher = Cipher.getInstance("AES/CTR/NoPadding")

@@ -14,10 +14,10 @@ kotlin {
 }
 
 dependencies {
-    // X25519 et HKDF. Android 10 n'a pas X25519 dans ses API publiques.
+    // X25519 and HKDF. Android 10 does not have X25519 in its public APIs.
     implementation("org.bouncycastle:bcprov-jdk18on:1.79")
     api("com.squareup.okhttp3:okhttp:4.12.0")
-    // Android fournit org.json ; sur la JVM des tests on prend l'artefact Maven.
+    // Android provides org.json; on the test JVM the Maven artifact is used.
     compileOnly("org.json:json:20240303")
     testImplementation("org.json:json:20240303")
     testImplementation("junit:junit:4.13.2")
@@ -25,5 +25,7 @@ dependencies {
 }
 
 tasks.test {
+    // Texts follow the device language: the tests expect French, whatever the machine's own language.
+    systemProperty("user.language", "fr")
     testLogging { events("failed", "skipped") }
 }

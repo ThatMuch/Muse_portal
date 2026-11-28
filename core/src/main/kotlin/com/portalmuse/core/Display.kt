@@ -13,21 +13,21 @@ private const val LOAD_DEADLINE_S = 45L
 private const val COMMAND_TIMEOUT_MS = 90_000
 
 sealed class PictureSource {
-    /** Un fichier sur la VM de Muse. */
+    /** A file on Muse's VM. */
     data class File(val path: String) : PictureSource()
-    /** Une image publique en https. */
+    /** A public https picture. */
     data class Web(val url: String) : PictureSource()
 }
 
-/** [image] est ce que l'écran a préparé, par exemple une image décodée. */
+/** [image] is what the screen prepared, for example a decoded picture. */
 class LoadedPicture(val image: Any, val caption: String?)
 
-/** L'écran de l'appareil, vu par les commandes. */
+/** The device's screen, as seen by the commands. */
 interface ScreenHost {
-    /** Faux si le kiosque n'est pas à l'écran. */
+    /** False if the kiosk is not on screen. */
     fun isAvailable(): Boolean
 
-    /** Télécharge et prépare une image ; `null` si ce n'est pas possible. Bloquant. */
+    /** Downloads and prepares a picture; `null` if not possible. Blocking. */
     fun load(source: PictureSource): Any?
 
     fun showPictures(pictures: List<LoadedPicture>, title: String?, durationMillis: Long): Boolean
@@ -36,8 +36,8 @@ interface ScreenHost {
 }
 
 /**
- * Ce que Muse peut faire de l'écran : montrer des images, montrer une page, et les retirer.
- * Les messages renvoyés à Muse sont en anglais, comme le reste du protocole.
+ * What Muse can do with the screen: show pictures, show a page, and remove them. Messages returned to Muse are
+ * in English, like the rest of the protocol.
  */
 class DisplayCommands(private val screen: ScreenHost) : CommandSet {
     override fun specs(): Map<String, JSONObject> {
@@ -75,7 +75,7 @@ class DisplayCommands(private val screen: ScreenHost) : CommandSet {
         )
     }
 
-    /** `null` si [command] n'est pas une commande d'écran. */
+    /** `null` if [command] is not a screen command. */
     override fun run(command: String, params: JSONObject): JSONObject? = when (command) {
         SHOW_IMAGES -> available { images(params) }
         SHOW_PAGE -> available { page(params) }
@@ -132,9 +132,9 @@ class DisplayCommands(private val screen: ScreenHost) : CommandSet {
     }
 }
 
-/** Une page écrite par Muse, enfermée : ni script, ni réseau, ni ressource extérieure. */
+/** A page written by Muse, locked in: no script, no network, no external resource. */
 object SafePage {
-    private const val HEAD = "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">" +
+    private const val HEAD = "<!doctype html><html><head><meta charset=\"utf-8\">" +
         "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; " +
         "style-src 'unsafe-inline'; font-src data:\">" +
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +

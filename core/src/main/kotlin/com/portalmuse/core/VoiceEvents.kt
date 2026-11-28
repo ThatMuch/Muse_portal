@@ -8,12 +8,13 @@ private const val MAX_DEPTH = 8
 private const val MAX_NESTED_CHARS = 64 * 1024
 private const val MAX_OBJECTS = 200
 
-/** Une phrase d'adieu : courte, et qui se termine par une formule pour finir l'appel. */
+/** A farewell sentence: short, ending with a phrase that closes the call. */
 object Farewell {
     private const val MAX_CHARS = 40
     private val ending = Regex(
         "(au ?revoir|[àa] bient[ôo]t|[àa] plus( tard)?|bonne nuit|bye([ -]bye)?|good ?bye|ciao|" +
-            "raccroche[rz]?|(termine|arr[êe]te|coupe) l.appel)( muse)?[\\s.!…]*$",
+            "raccroche[rz]?|(termine|arr[êe]te|coupe) l.appel|good ?night|see (you|ya)( later| soon| tomorrow)?|" +
+            "talk (to you )?(later|soon)|hang up|(end|stop) the call)( muse)?[\\s.!…]*$",
     )
 
     fun matches(phrase: String, museName: String? = null): Boolean {
@@ -24,11 +25,11 @@ object Farewell {
 }
 
 /**
- * Les événements vocaux tels que la conversation les relaie : leur forme n'est pas documentée.
- * On les parcourt, y compris le JSON rangé dans une chaîne.
+ * The voice events as the conversation relays them: their shape is not documented. They are walked through,
+ * including JSON stored in a string.
  */
 object VoiceEvents {
-    /** Tous les objets contenus dans [event], lui compris. */
+    /** All the objects contained in [event], itself included. */
     fun objects(event: JSONObject): List<JSONObject> {
         val found = ArrayList<JSONObject>()
         walk(event, 0, "") { value, _ -> if (value is JSONObject && found.size < MAX_OBJECTS) found.add(value) }
@@ -36,8 +37,8 @@ object VoiceEvents {
     }
 
     /**
-     * La structure d'un événement, sans aucun contenu : les chemins, le genre de chaque valeur,
-     * et les seuls identifiants de protocole rangés sous « type ».
+     * The structure of an event, without any content: the paths, the kind of each value, and only the protocol
+     * identifiers stored under "type".
      */
     fun shape(event: JSONObject): String {
         val parts = LinkedHashSet<String>()
@@ -56,7 +57,7 @@ object VoiceEvents {
 
     private val TYPE_KEYS = setOf("type", "event", "event_type", "kind", "method")
     private val IDENTIFIER = Regex("[a-z0-9_.\\-]{1,64}")
-    /** Un nom de champ aussi doit ressembler à un identifiant : certains sont des données. */
+    /** A field name must also look like an identifier: some are data. */
     private val FIELD = Regex("[A-Za-z_]{1,32}")
 
     private fun walk(value: Any?, depth: Int, path: String, visit: (Any, String) -> Unit) {

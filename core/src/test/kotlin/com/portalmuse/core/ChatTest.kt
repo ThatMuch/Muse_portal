@@ -42,7 +42,7 @@ class ChatTest {
         event("task.status", "status" to "completed", "reply_to_message_id" to "u1"),
     )
 
-    /** VM qui accepte l'abonnement, accuse réception puis joue [events] sur l'abonnement. */
+    /** VM that accepts the subscription, acknowledges, then plays [events] on the subscription. */
     private fun vm(
         subscribeStatus: Int = 200, chatStatus: Int = 200,
         events: Array<JSONObject> = answer(), eventsBeforeAck: Boolean = false,
@@ -111,7 +111,7 @@ class ChatTest {
     }
 
     @Test fun aWrittenReplyIsNotHeldByATaskThatStaysBusy() {
-        // Vu sur un vrai compte en réponse vocale : le message est clos, Muse reste « occupé ».
+        // Seen on a real account for a spoken reply: the message is closed, Muse stays "busy".
         val events = arrayOf(
             event("message.user", "message_id" to "u1"),
             event("agent.status", "activity_code" to "thinking"),

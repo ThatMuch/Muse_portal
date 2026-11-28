@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.app.Activity
 import android.view.Gravity
 import android.view.View
@@ -8,7 +9,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 
-/** « Minuteur terminé » en grand, tant qu'il sonne. */
+/** "Timer done" in large type, as long as it rings. */
 class TimerPanel(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
     private val title = Ui.label(activity, 56f).apply { gravity = Gravity.CENTER }
     private val names = Ui.label(activity, 30f, Ui.MUTED).apply { gravity = Gravity.CENTER }
@@ -22,7 +23,10 @@ class TimerPanel(private val activity: Activity, root: FrameLayout, private val 
             addView(title)
             addView(names, Ui.spaced(activity, top = 16))
             addView(
-                Ui.pill(activity, "Arrêter", Ui.ACCENT).apply { setOnClickListener { TimerCenter.stopRinging() } },
+                Ui.pill(activity, tr(
+                    "Stop",
+                    "Arrêter",
+                ), Ui.ACCENT).apply { setOnClickListener { TimerCenter.stopRinging() } },
                 LinearLayout.LayoutParams(Ui.dp(activity, 420), Ui.dp(activity, 96))
                     .apply { topMargin = Ui.dp(activity, 56) },
             )
@@ -39,7 +43,10 @@ class TimerPanel(private val activity: Activity, root: FrameLayout, private val 
     fun refresh() {
         val ringing = TimerCenter.ringing
         val shown = ringing.isNotEmpty()
-        title.text = if (ringing.size > 1) "Minuteurs terminés" else "Minuteur terminé"
+        title.text = if (ringing.size > 1) tr(
+            "Timers done",
+            "Minuteurs terminés",
+        ) else tr("Timer done", "Minuteur terminé")
         names.text = ringing.mapNotNull { it.label }.joinToString("  ·  ")
         if (shown != isOpen) {
             panel.visibility = if (shown) View.VISIBLE else View.GONE

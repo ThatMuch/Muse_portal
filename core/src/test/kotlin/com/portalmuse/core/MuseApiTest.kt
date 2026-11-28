@@ -24,7 +24,7 @@ private const val VMS = """{"vm_list":[
 class MuseApiTest {
     private val seen = mutableListOf<Request>()
 
-    /** Aucune requête ne sort : l'intercepteur répond à la place du serveur. */
+    /** No request goes out: the interceptor answers in place of the server. */
     private fun api(code: Int = 200, body: String = VMS, failure: IOException? = null): MuseApi {
         val fake = Interceptor { chain ->
             seen.add(chain.request())

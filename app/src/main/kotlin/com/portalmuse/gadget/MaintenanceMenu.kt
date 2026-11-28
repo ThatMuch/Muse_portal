@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
@@ -21,50 +22,60 @@ import java.util.Date
 import kotlin.concurrent.thread
 
 private const val WAKE_PERMISSION_REQUEST = 9
-/** Les réglages du SDK et ses mesures sur des voix de synthèse. */
+/** The SDK's settings and its measurements on synthetic voices. */
 private val SENSITIVITIES = listOf(
-    "basse" to "moins de fausses alertes",
-    "normale" to "le réglage du SDK",
-    "haute" to "vous entend mieux, mais environ trois fois plus de fausses alertes",
+    tr("low", "basse") to tr("fewer false alarms", "moins de fausses alertes"),
+    tr("normal", "normale") to tr("the SDK's setting", "le réglage du SDK"),
+    tr("high", "haute") to tr(
+        "hears you better, but about three times more false alarms",
+        "vous entend mieux, mais environ trois fois plus de fausses alertes",
+    ),
 )
 private const val LOCATION_PERMISSION_REQUEST = 10
 private const val CAMERA_PERMISSION_REQUEST = 11
 
-private const val TEACH_SCREEN = "Retiens ceci : le gadget Portal Muse est un écran tactile de 10 pouces " +
-    "posé chez moi. Ses appels te sont annoncés comme venant d'un accessoire portable, mais il a un grand écran. " +
-    "Quand je te parle depuis lui ou que je dis « sur le Portal », utilise ses commandes plutôt que mon " +
-    "téléphone : display.show_page et display.show_images pour montrer, display.notify pour une bannière, " +
-    "display.ask pour me demander un accord, apps.save pour une petite appli, feed.set pour mon fil."
+private val TEACH_SCREEN = tr(
+    "Remember this: the Portal Muse gadget is a 10 inch touchscreen standing at my home. Its calls are " +
+        "announced to you as coming from a wearable, but it has a large screen. When I talk to you from it or " +
+        "say “on the Portal”, use its commands rather than my phone: display.show_page and display.show_images " +
+        "to show things, display.notify for a banner, display.ask to ask for my approval, apps.save for a " +
+        "small app, feed.set for my feed.",
+    "Retiens ceci : le gadget Portal Muse est un écran tactile de 10 pouces " +
+        "posé chez moi. Ses appels te sont annoncés comme venant d'un accessoire portable, mais il a un grand écran. " +
+        "Quand je te parle depuis lui ou que je dis « sur le Portal », utilise ses commandes plutôt que mon " +
+        "téléphone : display.show_page et display.show_images pour montrer, display.notify pour une bannière, " +
+        "display.ask pour me demander un accord, apps.save pour une petite appli, feed.set pour mon fil.",
+)
 
-/** Menu de maintenance du kiosque. [reload] recharge le tableau de bord. */
+/** The kiosk's maintenance menu. [reload] reloads the dashboard. */
 class MaintenanceMenu(
     private val activity: Activity,
     private val settings: Settings,
     private val onWakeWordChanged: () -> Unit,
     private val onHomeChanged: (dimNow: Boolean) -> Unit,
-    /** Envoie un message à Muse au nom de l'utilisateur et montre sa réponse. */
+    /** Sends a message to Muse in the user's name and shows its reply. */
     private val tell: (String) -> Unit,
     private val reload: () -> Unit,
 ) {
     private val secrets = SecretStore(activity)
 
-    /** Le Portal impose un fond de dialogue blanc : il faut un thème clair pour lire le texte. */
+    /** The Portal forces a white dialog background: a light theme is needed to read the text. */
     private fun dialog() = AlertDialog.Builder(activity, android.R.style.Theme_Material_Light_Dialog_Alert)
 
     private class Entry(val label: String, val run: () -> Unit)
 
-    private fun yes(value: Boolean) = if (value) "oui" else "non"
+    private fun yes(value: Boolean) = if (value) tr("yes", "oui") else tr("no", "non")
 
-    /** Six rubriques ; chaque réglage affiche son état, et un toucher le change. */
+    /** Six sections; each setting shows its state, and a touch changes it. */
     fun show() = list(
         "Maintenance",
         listOf(
-            Entry("Voix et appels", ::voiceMenu),
-            Entry("Ce que Muse peut faire", ::rightsMenu),
-            Entry("Écran", ::screenMenu),
-            Entry("Connexion à Muse", ::connectionMenu),
-            Entry("Informations", ::showInfo),
-            Entry("Quitter le kiosque") { activity.finishAndRemoveTask() },
+            Entry(tr("Voice and calls", "Voix et appels"), ::voiceMenu),
+            Entry(tr("What Muse may do", "Ce que Muse peut faire"), ::rightsMenu),
+            Entry(tr("Screen", "Écran"), ::screenMenu),
+            Entry(tr("Muse connection", "Connexion à Muse"), ::connectionMenu),
+            Entry(tr("Information", "Informations"), ::showInfo),
+            Entry(tr("Leave the kiosk", "Quitter le kiosque")) { activity.finishAndRemoveTask() },
         ),
         back = false,
     )
@@ -73,36 +84,51 @@ class MaintenanceMenu(
         val shown = dialog()
             .setTitle(title)
             .setItems(entries.map { it.label }.toTypedArray()) { _, which -> entries[which].run() }
-            .setNegativeButton("Fermer", null)
-        if (back) shown.setNeutralButton("Retour") { _, _ -> show() }
+            .setNegativeButton(tr("Close", "Fermer"), null)
+        if (back) shown.setNeutralButton(tr("Back", "Retour")) { _, _ -> show() }
         shown.show()
     }
 
     private fun voiceMenu(): Unit = list(
-        "Voix et appels",
+        tr("Voice and calls", "Voix et appels"),
         buildList {
             add(
-                Entry("« Hey Muse » : ${if (settings.wakeWord) "activé" else "désactivé"}") {
+                Entry(tr(
+                    "“Hey Muse”: ${if (settings.wakeWord) "on" else "off"}",
+                    "« Hey Muse » : ${if (settings.wakeWord) "activé" else "désactivé"}",
+                )) {
                     if (settings.wakeWord) setWakeWord(false) else enableWakeWord()
                 },
             )
             if (settings.wakeWord) {
-                add(Entry("Sensibilité : ${SENSITIVITIES[settings.wakeSensitivity].first}", ::chooseSensitivity))
+                add(Entry(tr(
+                    "Sensitivity: ${SENSITIVITIES[settings.wakeSensitivity].first}",
+                    "Sensibilité : ${SENSITIVITIES[settings.wakeSensitivity].first}",
+                ), ::chooseSensitivity))
             }
             add(
-                Entry("Appels : ${if (settings.videoCalls) "avec la vidéo de Muse" else "voix seule"}") {
+                Entry(tr(
+                    "Calls: ${if (settings.videoCalls) "with Muse's video" else "voice only"}",
+                    "Appels : ${if (settings.videoCalls) "avec la vidéo de Muse" else "voix seule"}",
+                )) {
                     settings.videoCalls = !settings.videoCalls
                     voiceMenu()
                 },
             )
             add(
-                Entry("Réponses lues à voix haute : ${yes(settings.spokenReplies)}") {
+                Entry(tr(
+                    "Replies read aloud: ${yes(settings.spokenReplies)}",
+                    "Réponses lues à voix haute : ${yes(settings.spokenReplies)}",
+                )) {
                     settings.spokenReplies = !settings.spokenReplies
                     voiceMenu()
                 },
             )
             add(
-                Entry("Conversation à part pour les messages écrits : ${yes(settings.separateChat)}") {
+                Entry(tr(
+                    "Separate conversation for written messages: ${yes(settings.separateChat)}",
+                    "Conversation à part pour les messages écrits : ${yes(settings.separateChat)}",
+                )) {
                     settings.separateChat = !settings.separateChat
                     voiceMenu()
                 },
@@ -111,32 +137,53 @@ class MaintenanceMenu(
     )
 
     private fun rightsMenu(): Unit = list(
-        "Ce que Muse peut faire",
+        tr("What Muse may do", "Ce que Muse peut faire"),
         buildList {
-            add(Entry("Utiliser l'écran : ${yes(settings.screenAllowed)}") { allowScreen(!settings.screenAllowed) })
-            if (settings.screenAllowed) add(Entry("Apprendre à Muse à utiliser cet écran", ::teachScreen))
+            add(Entry(tr(
+                "Use the screen: ${yes(settings.screenAllowed)}",
+                "Utiliser l'écran : ${yes(settings.screenAllowed)}",
+            )) { allowScreen(!settings.screenAllowed) })
+            if (settings.screenAllowed) add(Entry(tr(
+                "Teach Muse to use this screen",
+                "Apprendre à Muse à utiliser cet écran",
+            ), ::teachScreen))
             add(
-                Entry("Photos « Regarde ça » : ${yes(settings.cameraAllowed)}") {
+                Entry(tr(
+                    "“Look at this” photos: ${yes(settings.cameraAllowed)}",
+                    "Photos « Regarde ça » : ${yes(settings.cameraAllowed)}",
+                )) {
                     if (settings.cameraAllowed) allowCamera(false) else enableCamera()
                 },
             )
             if (settings.cameraAllowed) {
                 add(
-                    Entry("Ranger les photos envoyées chez Muse : ${yes(settings.keepPhotos)}") {
+                    Entry(tr(
+                        "Keep sent photos in Muse's files: ${yes(settings.keepPhotos)}",
+                        "Ranger les photos envoyées chez Muse : ${yes(settings.keepPhotos)}",
+                    )) {
                         settings.keepPhotos = !settings.keepPhotos
                         rightsMenu()
                     },
                 )
             }
             add(
-                Entry("Bluetooth : ${yes(settings.bluetoothAllowed)}") {
+                Entry(tr(
+                    "Bluetooth: ${yes(settings.bluetoothAllowed)}",
+                    "Bluetooth : ${yes(settings.bluetoothAllowed)}",
+                )) {
                     if (settings.bluetoothAllowed) allowBluetooth(false) else enableBluetooth()
                 },
             )
             val known = settings.bluetoothDevices.size
-            if (known > 0) add(Entry("Oublier les objets Bluetooth autorisés ($known)", ::forgetBluetooth))
+            if (known > 0) add(Entry(tr(
+                "Forget the allowed Bluetooth devices ($known)",
+                "Oublier les objets Bluetooth autorisés ($known)",
+            ), ::forgetBluetooth))
             add(
-                Entry("Être prévenu des pannes : ${yes(settings.crashReports)}") {
+                Entry(tr(
+                    "Be told about crashes: ${yes(settings.crashReports)}",
+                    "Être prévenu des pannes : ${yes(settings.crashReports)}",
+                )) {
                     settings.crashReports = !settings.crashReports
                     rightsMenu()
                 },
@@ -145,35 +192,44 @@ class MaintenanceMenu(
     )
 
     private fun screenMenu(): Unit = list(
-        "Écran",
+        tr("Screen", "Écran"),
         buildList {
-            add(Entry("Mode nuit : ${nightSummary()}", ::nightMenu))
+            add(Entry(tr("Night mode: ${nightSummary()}", "Mode nuit : ${nightSummary()}"), ::nightMenu))
             add(
-                Entry("Derniers messages sous « Plus » : ${yes(settings.historyShown)}") {
+                Entry(tr(
+                    "Latest messages under “More”: ${yes(settings.historyShown)}",
+                    "Derniers messages sous « Plus » : ${yes(settings.historyShown)}",
+                )) {
                     settings.historyShown = !settings.historyShown
                     onHomeChanged(false)
                     screenMenu()
                 },
             )
-            if (FrameStore.load(activity) != null) add(Entry("Retirer les photos du cadre", ::removeFrame))
-            add(Entry("Adresse du tableau de bord", ::editUrl))
-            add(Entry("Recharger la page", reload))
+            if (FrameStore.load(activity) != null) add(Entry(tr(
+                "Remove the frame photos",
+                "Retirer les photos du cadre",
+            ), ::removeFrame))
+            add(Entry(tr("Dashboard address", "Adresse du tableau de bord"), ::editUrl))
+            add(Entry(tr("Reload the page", "Recharger la page"), reload))
             if (!SystemSettings.canDrawOverlays(activity)) {
-                add(Entry("Autoriser l'écran au démarrage", ::allowBootScreen))
+                add(Entry(tr("Allow the screen at startup", "Autoriser l'écran au démarrage"), ::allowBootScreen))
             }
         },
     )
 
     private fun connectionMenu(): Unit = list(
-        "Connexion à Muse",
+        tr("Muse connection", "Connexion à Muse"),
         buildList {
             if (PairingStatus.open) {
-                add(Entry("Arrêter l'appairage") { service(GadgetService.ACTION_STOP_PAIRING) })
+                add(Entry(tr(
+                    "Stop pairing",
+                    "Arrêter l'appairage",
+                )) { service(GadgetService.ACTION_STOP_PAIRING) })
             } else {
-                add(Entry("Ouvrir l'appairage Bluetooth", ::openPairing))
+                add(Entry(tr("Open Bluetooth pairing", "Ouvrir l'appairage Bluetooth"), ::openPairing))
             }
-            add(Entry("Jeton SDK Muse", ::editToken))
-            if (secrets.pairing != null) add(Entry("Dissocier de Muse", ::unpair))
+            add(Entry(tr("Muse SDK token", "Jeton SDK Muse"), ::editToken))
+            if (secrets.pairing != null) add(Entry(tr("Unpair from Muse", "Dissocier de Muse"), ::unpair))
         },
     )
 
@@ -185,10 +241,13 @@ class MaintenanceMenu(
 
     private fun openPairing() {
         if (secrets.sdkToken == null) {
-            toast("Saisir d'abord le jeton SDK Muse.")
+            toast(tr("Enter the Muse SDK token first.", "Saisir d'abord le jeton SDK Muse."))
             editToken()
         } else if (secrets.pairing != null) {
-            confirm("Réappairer ?", "Le Portal est déjà appairé. Un nouvel appairage remplace les jetons.", "Réappairer") {
+            confirm(tr("Pair again?", "Réappairer ?"), tr(
+                "The Portal is already paired. Pairing again replaces the tokens.",
+                "Le Portal est déjà appairé. Un nouvel appairage remplace les jetons.",
+            ), tr("Pair again", "Réappairer")) {
                 service(GadgetService.ACTION_START_PAIRING)
             }
         } else {
@@ -199,14 +258,17 @@ class MaintenanceMenu(
     private fun confirm(title: String, message: String, action: String, run: () -> Unit) {
         dialog().setTitle(title).setMessage(message)
             .setPositiveButton(action) { _, _ -> run() }
-            .setNegativeButton("Annuler", null)
+            .setNegativeButton(tr("Cancel", "Annuler"), null)
             .show()
     }
 
     private fun unpair() = confirm(
-        "Dissocier de Muse ?",
-        "Les jetons sont effacés du Portal. Retirez aussi l'appareil dans l'app Muse.",
-        "Dissocier",
+        tr("Unpair from Muse?", "Dissocier de Muse ?"),
+        tr(
+            "The tokens are erased from the Portal. Also remove the device in the Muse app.",
+            "Les jetons sont effacés du Portal. Retirez aussi l'appareil dans l'app Muse.",
+        ),
+        tr("Unpair", "Dissocier"),
     ) {
         secrets.deletePairing()
         AvatarStore.clear(activity)
@@ -219,53 +281,74 @@ class MaintenanceMenu(
         settings.customShortcuts = emptyList()
         onHomeChanged(false)
         service(GadgetService.ACTION_PAIRING_CHANGED)
-        toast("Jetons effacés du Portal.")
+        toast(tr("Tokens erased from the Portal.", "Jetons effacés du Portal."))
     }
 
     private fun teachScreen() = confirm(
-        "Apprendre l'écran à Muse ?",
-        "Ce message part dans votre conversation, pour que Muse s'en souvienne :\n\n« $TEACH_SCREEN »",
-        "Envoyer",
+        tr("Teach Muse about this screen?", "Apprendre l'écran à Muse ?"),
+        tr(
+            "This message goes into your conversation, so that Muse remembers it:\n\n“$TEACH_SCREEN”",
+            "Ce message part dans votre conversation, pour que Muse s'en souvienne :\n\n« $TEACH_SCREEN »",
+        ),
+        tr("Send", "Envoyer"),
     ) { tell(TEACH_SCREEN) }
 
-    /** La session se rouvre pour déclarer, ou retirer, les commandes d'écran. */
+    /** The session reopens to declare, or remove, the screen commands. */
     private fun allowScreen(allowed: Boolean) {
         settings.screenAllowed = allowed
         service(GadgetService.ACTION_PAIRING_CHANGED)
         onHomeChanged(false)
-        toast(if (allowed) "Muse peut utiliser l'écran." else "Muse ne peut plus utiliser l'écran.")
+        toast(if (allowed) tr("Muse may use the screen.", "Muse peut utiliser l'écran.") else tr(
+            "Muse may no longer use the screen.",
+            "Muse ne peut plus utiliser l'écran.",
+        ))
     }
 
     private fun isNight() = settings.night.isNight(Clock.minuteOfDay(), System.currentTimeMillis())
 
     private fun nightSummary(): String {
         val night = settings.night
-        val hours = "${NightSettings.formatTime(night.startMinute)} à ${NightSettings.formatTime(night.endMinute)}"
-        return (if (isNight()) "actif, " else "") + if (night.scheduled) hours else "sans horaires"
+        val hours = tr(
+            "${NightSettings.formatTime(night.startMinute)} to ${NightSettings.formatTime(night.endMinute)}",
+            "${NightSettings.formatTime(night.startMinute)} à ${NightSettings.formatTime(night.endMinute)}",
+        )
+        return (if (isNight()) tr("on, ", "actif, ") else "") + if (night.scheduled) hours else tr(
+            "no schedule",
+            "sans horaires",
+        )
     }
 
     private fun nightMenu() {
         val active = isNight()
         val scheduled = settings.night.scheduled
         val entries = listOf<Pair<String, () -> Unit>>(
-            (if (active) "Sortir du mode nuit maintenant" else "Passer en mode nuit maintenant") to {
+            (if (active) tr("Leave night mode now", "Sortir du mode nuit maintenant") else tr(
+                "Start night mode now",
+                "Passer en mode nuit maintenant",
+            )) to {
                 settings.changeNight { it.force(!active, Clock.minuteOfDay(), System.currentTimeMillis()) }
                 onHomeChanged(!active)
             },
-            "Changer les horaires" to ::editNightHours,
-            (if (scheduled) "Désactiver les horaires" else "Activer les horaires") to {
+            tr("Change the hours", "Changer les horaires") to ::editNightHours,
+            (if (scheduled) tr("Turn the schedule off", "Désactiver les horaires") else tr(
+                "Turn the schedule on",
+                "Activer les horaires",
+            )) to {
                 settings.changeNight { it.copy(scheduled = !scheduled, forced = null) }
                 onHomeChanged(false)
             },
         )
-        dialog().setTitle("Mode nuit")
+        dialog().setTitle(tr("Night mode", "Mode nuit"))
             .setItems(entries.map { it.first }.toTypedArray()) { _, which -> entries[which].second() }
-            .setNegativeButton("Fermer", null)
+            .setNegativeButton(tr("Close", "Fermer"), null)
             .show()
     }
 
-    private fun editNightHours() = pickTime("Début de la nuit", settings.night.startMinute) { start ->
-        pickTime("Fin de la nuit", settings.night.endMinute) { end ->
+    private fun editNightHours() = pickTime(tr(
+        "Start of the night",
+        "Début de la nuit",
+    ), settings.night.startMinute) { start ->
+        pickTime(tr("End of the night", "Fin de la nuit"), settings.night.endMinute) { end ->
             settings.changeNight { it.copy(scheduled = true, startMinute = start, endMinute = end, forced = null) }
             onHomeChanged(false)
         }
@@ -278,16 +361,23 @@ class MaintenanceMenu(
         ).apply { setTitle(title) }.show()
     }
 
-    private fun removeFrame() = confirm("Retirer les photos ?", "Le cadre photo ne s'affichera plus.", "Retirer") {
+    private fun removeFrame() = confirm(tr("Remove the photos?", "Retirer les photos ?"), tr(
+        "The photo frame will no longer show.",
+        "Le cadre photo ne s'affichera plus.",
+    ), tr("Remove", "Retirer")) {
         FrameStore.clear(activity)
         onHomeChanged(false)
     }
 
     private fun enableCamera() = confirm(
-        "Activer les photos ?",
-        "Un bouton « Regarde ça » apparaît à l'accueil, et Muse pourra demander une photo. Dans les deux cas, " +
-            "rien n'est pris ni envoyé sans que vous touchiez « Prendre la photo » puis « Envoyer ».",
-        "Activer",
+        tr("Enable photos?", "Activer les photos ?"),
+        tr(
+            "A “Look at this” button appears on the home screen, and Muse will be able to ask for a photo. " +
+                "Either way, nothing is taken or sent unless you touch “Take the photo” then “Send”.",
+            "Un bouton « Regarde ça » apparaît à l'accueil, et Muse pourra demander une photo. Dans les deux cas, " +
+                "rien n'est pris ni envoyé sans que vous touchiez « Prendre la photo » puis « Envoyer ».",
+        ),
+        tr("Enable", "Activer"),
     ) {
         if (activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             activity.requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST)
@@ -295,19 +385,26 @@ class MaintenanceMenu(
         allowCamera(true)
     }
 
-    /** La session se rouvre pour déclarer, ou retirer, la commande photo. */
+    /** The session reopens to declare, or remove, the photo command. */
     private fun allowCamera(allowed: Boolean) {
         settings.cameraAllowed = allowed
         onHomeChanged(false)
         service(GadgetService.ACTION_PAIRING_CHANGED)
-        toast(if (allowed) "Photos activées." else "Photos désactivées.")
+        toast(if (allowed) tr(
+            "Photos enabled.",
+            "Photos activées.",
+        ) else tr("Photos disabled.", "Photos désactivées."))
     }
 
     private fun enableBluetooth() = confirm(
-        "Autoriser le Bluetooth ?",
-        "Muse pourra voir les appareils Bluetooth autour du Portal. Pour se connecter à un nouvel objet, " +
-            "il demandera votre accord à l'écran. Android exige l'autorisation « position » pour les recherches.",
-        "Autoriser",
+        tr("Allow Bluetooth?", "Autoriser le Bluetooth ?"),
+        tr(
+            "Muse will be able to see the Bluetooth devices around the Portal. To connect to a new one, it " +
+                "will ask for your approval on screen. Android requires the “location” permission for scans.",
+            "Muse pourra voir les appareils Bluetooth autour du Portal. Pour se connecter à un nouvel objet, " +
+                "il demandera votre accord à l'écran. Android exige l'autorisation « position » pour les recherches.",
+        ),
+        tr("Allow", "Autoriser"),
     ) {
         if (activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST)
@@ -315,32 +412,38 @@ class MaintenanceMenu(
         allowBluetooth(true)
     }
 
-    /** La session se rouvre pour déclarer, ou retirer, les commandes Bluetooth. */
+    /** The session reopens to declare, or remove, the Bluetooth commands. */
     private fun allowBluetooth(allowed: Boolean) {
         settings.bluetoothAllowed = allowed
         if (!allowed) BleCentral.closeAll()
         service(GadgetService.ACTION_PAIRING_CHANGED)
-        toast(if (allowed) "Muse peut utiliser le Bluetooth." else "Muse ne peut plus utiliser le Bluetooth.")
+        toast(if (allowed) tr("Muse may use Bluetooth.", "Muse peut utiliser le Bluetooth.") else tr(
+            "Muse may no longer use Bluetooth.",
+            "Muse ne peut plus utiliser le Bluetooth.",
+        ))
     }
 
     private fun forgetBluetooth() = confirm(
-        "Oublier ces objets ?",
-        settings.bluetoothDevices.entries.joinToString("\n") { "${it.value.ifEmpty { "Sans nom" }}  ${it.key}" },
-        "Oublier",
+        tr("Forget these devices?", "Oublier ces objets ?"),
+        settings.bluetoothDevices.entries.joinToString("\n") { tr(
+            "${it.value.ifEmpty { "No name" }}  ${it.key}",
+            "${it.value.ifEmpty { "Sans nom" }}  ${it.key}",
+        ) },
+        tr("Forget", "Oublier"),
     ) {
         BleCentral.closeAll()
         settings.forgetBluetoothDevices()
     }
 
     private fun chooseSensitivity() {
-        val labels = SENSITIVITIES.map { "${it.first.replaceFirstChar(Char::uppercase)} : ${it.second}" }
-        dialog().setTitle("Sensibilité de « Hey Muse »")
+        val labels = SENSITIVITIES.map { it.first.replaceFirstChar(Char::uppercase) + tr(": ", " : ") + it.second }
+        dialog().setTitle(tr("“Hey Muse” sensitivity", "Sensibilité de « Hey Muse »"))
             .setSingleChoiceItems(labels.toTypedArray(), settings.wakeSensitivity) { shown, which ->
                 settings.wakeSensitivity = which
                 shown.dismiss()
                 onWakeWordChanged()
             }
-            .setNegativeButton("Annuler", null)
+            .setNegativeButton(tr("Cancel", "Annuler"), null)
             .show()
     }
 
@@ -350,11 +453,16 @@ class MaintenanceMenu(
     }
 
     private fun enableWakeWord() = confirm(
-        "Activer « Hey Muse » ?",
-        "Tant que cet écran est affiché, le micro écoute le mot sur le Portal, sans rien envoyer. " +
-            "Quand il l'entend, un appel s'ouvre et le son part vers Muse. Il se ferme après 20 s sans demande. " +
-            "Il peut se tromper, jusqu'à une dizaine de fois par jour.",
-        "Activer",
+        tr("Enable “Hey Muse”?", "Activer « Hey Muse » ?"),
+        tr(
+            "While this screen is shown, the microphone listens for the words on the Portal, without " +
+                "sending anything. When it hears them, a call opens and sound goes to Muse. It closes after 20 " +
+                "s without a request. It can get it wrong, up to about ten times a day.",
+            "Tant que cet écran est affiché, le micro écoute le mot sur le Portal, sans rien envoyer. " +
+                "Quand il l'entend, un appel s'ouvre et le son part vers Muse. Il se ferme après 20 s sans demande. " +
+                "Il peut se tromper, jusqu'à une dizaine de fois par jour.",
+        ),
+        tr("Enable", "Activer"),
     ) {
         if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), WAKE_PERMISSION_REQUEST)
@@ -362,22 +470,29 @@ class MaintenanceMenu(
         setWakeWord(true)
     }
 
-    /** Ouvre le réglage Android : c'est à l'utilisateur de l'activer. */
+    /** Opens the Android setting: it is up to the user to turn it on. */
     private fun allowBootScreen() = confirm(
-        "Écran au démarrage",
-        "Pour s'ouvrir seule après un redémarrage, l'app a besoin de « Afficher par-dessus les autres " +
-            "applications ». Elle ne dessine rien par-dessus les autres apps.",
-        "Ouvrir le réglage",
+        tr("Screen at startup", "Écran au démarrage"),
+        tr(
+            "To open on its own after a reboot, the app needs “Display over other apps”. It draws nothing " +
+                "over other apps.",
+            "Pour s'ouvrir seule après un redémarrage, l'app a besoin de « Afficher par-dessus les autres " +
+                "applications ». Elle ne dessine rien par-dessus les autres apps.",
+        ),
+        tr("Open the setting", "Ouvrir le réglage"),
     ) {
         val target = Uri.parse("package:${activity.packageName}")
         try {
             activity.startActivity(Intent(SystemSettings.ACTION_MANAGE_OVERLAY_PERMISSION, target))
         } catch (e: ActivityNotFoundException) {
-            toast("Ce réglage n'est pas disponible sur le Portal.")
+            toast(tr(
+                "This setting is not available on the Portal.",
+                "Ce réglage n'est pas disponible sur le Portal.",
+            ))
         }
     }
 
-    /** Le jeton est masqué, jamais réaffiché ni journalisé. */
+    /** The token is masked, never shown again or logged. */
     private fun editToken() {
         val builder = dialog()
         val input = EditText(builder.context).apply {
@@ -388,21 +503,30 @@ class MaintenanceMenu(
         }
         val current = secrets.sdkToken
         builder
-            .setTitle("Jeton SDK Muse")
-            .setMessage("gadgets.muse.ai > Settings > SDK tokens.\nJeton actuel : ${SdkToken.fingerprint(current)}.")
+            .setTitle(tr("Muse SDK token", "Jeton SDK Muse"))
+            .setMessage(tr(
+                "gadgets.muse.ai > Settings > SDK tokens.\nCurrent token: ${SdkToken.fingerprint(current)}.",
+                "gadgets.muse.ai > Settings > SDK tokens.\nJeton actuel : ${SdkToken.fingerprint(current)}.",
+            ))
             .setView(input)
-            .setPositiveButton("Enregistrer") { _, _ ->
+            .setPositiveButton(tr("Save", "Enregistrer")) { _, _ ->
                 val token = input.text.toString().trim()
                 if (!SdkToken.isValid(token)) {
-                    toast("Jeton non enregistré : format inattendu (${token.length} caractères).")
+                    toast(tr(
+                        "Token not saved: unexpected format (${token.length} characters).",
+                        "Jeton non enregistré : format inattendu (${token.length} caractères).",
+                    ))
                 } else {
                     secrets.sdkToken = token
-                    toast(if (secrets.sdkToken == token) "Jeton enregistré." else "Échec du stockage chiffré.")
+                    toast(if (secrets.sdkToken == token) tr("Token saved.", "Jeton enregistré.") else tr(
+                        "Encrypted storage failed.",
+                        "Échec du stockage chiffré.",
+                    ))
                 }
             }
-            .setNegativeButton("Annuler", null)
+            .setNegativeButton(tr("Cancel", "Annuler"), null)
             .apply {
-                if (current != null) setNeutralButton("Effacer") { _, _ -> secrets.sdkToken = null }
+                if (current != null) setNeutralButton(tr("Erase", "Effacer")) { _, _ -> secrets.sdkToken = null }
             }
             .show()
     }
@@ -411,15 +535,18 @@ class MaintenanceMenu(
         val builder = dialog()
         val input = EditText(builder.context).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            // Android 10 ne résout pas les noms en .local : il faut l'adresse IP.
+            // Android 10 does not resolve .local names: an IP address is needed.
             hint = "http://192.168.1.50:8123"
             setText(settings.dashboardUrl.takeIf { it != Settings.WELCOME_URL }.orEmpty())
         }
         builder
-            .setTitle("Adresse du tableau de bord")
-            .setMessage("Laisser vide pour revenir à la page d'accueil.")
+            .setTitle(tr("Dashboard address", "Adresse du tableau de bord"))
+            .setMessage(tr(
+                "Leave empty to go back to the home page.",
+                "Laisser vide pour revenir à la page d'accueil.",
+            ))
             .setView(input)
-            .setPositiveButton("Enregistrer") { _, _ ->
+            .setPositiveButton(tr("Save", "Enregistrer")) { _, _ ->
                 val text = input.text.toString().trim()
                 val uri = Uri.parse(text)
                 if (text.isEmpty()) {
@@ -427,45 +554,78 @@ class MaintenanceMenu(
                 } else if (uri.scheme in listOf("http", "https") && !uri.host.isNullOrEmpty()) {
                     settings.dashboardUrl = text
                 } else {
-                    toast("L'adresse doit commencer par http:// ou https://")
+                    toast(tr(
+                        "The address must start with http:// or https://",
+                        "L'adresse doit commencer par http:// ou https://",
+                    ))
                     return@setPositiveButton
                 }
                 reload()
             }
-            .setNegativeButton("Annuler", null)
+            .setNegativeButton(tr("Cancel", "Annuler"), null)
             .show()
     }
 
     private fun showInfo() {
         val version = activity.packageManager.getPackageInfo(activity.packageName, 0).versionName
-        val webView = WebView.getCurrentWebViewPackage()?.versionName ?: "inconnue"
+        val webView = WebView.getCurrentWebViewPackage()?.versionName ?: tr("unknown", "inconnue")
         val pairing = secrets.pairing?.let {
             val date = DateFormat.getDateTimeInstance().format(Date(it.accessTokenSavedAt * 1000))
-            "oui (${it.nodeId}), jetons vérifiés le $date"
-        } ?: "non"
+            tr("yes (${it.nodeId}), tokens checked on $date", "oui (${it.nodeId}), jetons vérifiés le $date")
+        } ?: tr("no", "non")
         val lines = listOf(
-            "Version : $version",
-            "Nom Bluetooth d'appairage : ${settings.identity().bleName}",
-            "Appairé à Muse : $pairing",
-            "Session Muse : ${MuseStatus.text}",
-            "Écran pour Muse : ${if (settings.screenAllowed) "autorisé" else "interdit"}",
-            "Photos : ${if (settings.cameraAllowed) "activées" else "désactivées"}",
-            "Bluetooth pour Muse : ${if (settings.bluetoothAllowed) "autorisé" else "interdit"}",
-            "Hey Muse : ${if (settings.wakeWord) "activé" else "désactivé"}",
-            "Jeton SDK : ${SdkToken.fingerprint(secrets.sdkToken)}",
-            "Écran au démarrage : ${if (SystemSettings.canDrawOverlays(activity)) "autorisé" else "non autorisé"}",
-            "Stockage chiffré : ${if (secrets.selfCheck()) "fonctionne" else "en échec"}",
-            "WebView : $webView",
-            "Adresse : ${settings.dashboardUrl}",
+            tr("Version: $version", "Version : $version"),
+            tr(
+                "Bluetooth pairing name: ${settings.identity().bleName}",
+                "Nom Bluetooth d'appairage : ${settings.identity().bleName}",
+            ),
+            tr("Paired with Muse: $pairing", "Appairé à Muse : $pairing"),
+            tr("Muse session: ${MuseStatus.text}", "Session Muse : ${MuseStatus.text}"),
+            tr(
+                "Screen for Muse: ${if (settings.screenAllowed) "allowed" else "not allowed"}",
+                "Écran pour Muse : ${if (settings.screenAllowed) "autorisé" else "interdit"}",
+            ),
+            tr(
+                "Photos: ${if (settings.cameraAllowed) "enabled" else "disabled"}",
+                "Photos : ${if (settings.cameraAllowed) "activées" else "désactivées"}",
+            ),
+            tr(
+                "Bluetooth for Muse: ${if (settings.bluetoothAllowed) "allowed" else "not allowed"}",
+                "Bluetooth pour Muse : ${if (settings.bluetoothAllowed) "autorisé" else "interdit"}",
+            ),
+            tr(
+                "Hey Muse: ${if (settings.wakeWord) "on" else "off"}",
+                "Hey Muse : ${if (settings.wakeWord) "activé" else "désactivé"}",
+            ),
+            tr(
+                "SDK token: ${SdkToken.fingerprint(secrets.sdkToken)}",
+                "Jeton SDK : ${SdkToken.fingerprint(secrets.sdkToken)}",
+            ),
+            tr(
+                "Screen at startup: ${if (SystemSettings.canDrawOverlays(activity)) "allowed" else "not allowed"}",
+                "Écran au démarrage : ${if (SystemSettings.canDrawOverlays(activity)) "autorisé" else "non autorisé"}",
+            ),
+            tr(
+                "Encrypted storage: ${if (secrets.selfCheck()) "working" else "failing"}",
+                "Stockage chiffré : ${if (secrets.selfCheck()) "fonctionne" else "en échec"}",
+            ),
+            tr("WebView: $webView", "WebView : $webView"),
+            tr("Address: ${settings.dashboardUrl}", "Adresse : ${settings.dashboardUrl}"),
         )
-        fun text(server: String) = (lines + "Serveur Muse : $server").joinToString("\n")
-        val shown = dialog().setTitle("Informations").setMessage(text("test en cours…"))
+        fun text(server: String) = (lines + tr(
+            "Muse server: $server",
+            "Serveur Muse : $server",
+        )).joinToString("\n")
+        val shown = dialog().setTitle(tr(
+            "Information",
+            "Informations",
+        )).setMessage(text(tr("testing…", "test en cours…")))
             .setPositiveButton("OK", null).show()
         thread(name = "muse-probe") {
             val result = try {
                 MuseHttp.api(activity).probe()
             } catch (e: Exception) {
-                "TLS indisponible (${e.javaClass.simpleName})"
+                tr("TLS unavailable (${e.javaClass.simpleName})", "TLS indisponible (${e.javaClass.simpleName})")
             }
             activity.runOnUiThread { if (shown.isShowing) shown.setMessage(text(result)) }
         }

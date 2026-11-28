@@ -11,20 +11,20 @@ import java.io.IOException
 
 private const val TAG = "PortalMuse"
 
-/** Note les pannes avant que le processus meure, pour les dire à Muse à la prochaine connexion. */
+/** Records crashes before the process dies, to tell Muse at the next connection. */
 object CrashRecorder {
     private fun file(context: Context) = File(context.filesDir, "error_report.json")
     private fun state(context: Context) = context.getSharedPreferences("crash", Context.MODE_PRIVATE)
 
     fun install(context: Context) {
         val state = state(context)
-        // Une panne au lancement précédent prolonge la série ; un lancement sans panne la remet à zéro.
+        // A crash at the previous launch extends the streak; a launch without a crash resets it.
         val previous = if (state.getBoolean("crashed", false)) state.getInt("streak", 0) else 0
         state.edit().putBoolean("crashed", false).commit()
         Thread.setDefaultUncaughtExceptionHandler { _, error ->
             runCatching { record(context, error, previous + 1) }
-            // Sans la boîte « l'application s'est arrêtée » d'Android, qui resterait sur le
-            // kiosque : le processus s'arrête, le service repart et rouvre l'écran.
+            // Without Android's "app has stopped" dialog, which would stay on the kiosk: the process stops, the
+            // service restarts and reopens the screen.
             Process.killProcess(Process.myPid())
         }
     }
@@ -34,12 +34,12 @@ object CrashRecorder {
         val uptime = (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()) / 1000
         val report = CrashReport.of(error, context.packageName.substringBeforeLast('.'), streak, version, uptime)
         file(context).writeText(report.store())
-        // Le type et la ligne seulement, comme dans le rapport.
-        Log.e(TAG, "plantage : ${report.cause} ${report.detail.orEmpty()}")
+        // The type and the line only, as in the report.
+        Log.e(TAG, "crash: ${report.cause} ${report.detail.orEmpty()}")
         state(context).edit().putBoolean("crashed", true).putInt("streak", streak).commit()
     }
 
-    /** La dernière panne pas encore dite à Muse. */
+    /** The last crash not yet reported to Muse. */
     fun pending(context: Context): CrashReport? = try {
         file(context).takeIf { it.exists() }?.let { CrashReport.restore(it.readText()) }
     } catch (e: IOException) {
@@ -48,11 +48,11 @@ object CrashRecorder {
 
     fun sent(context: Context) {
         file(context).delete()
-        Log.i(TAG, "rapport de panne envoyé à Muse")
+        Log.i(TAG, "crash report sent to Muse")
     }
 }
 
-/** Le processus de l'application : le relevé des pannes s'installe avant tout le reste. */
+/** The application process: crash recording is installed before anything else. */
 class PortalApp : Application() {
     override fun onCreate() {
         super.onCreate()

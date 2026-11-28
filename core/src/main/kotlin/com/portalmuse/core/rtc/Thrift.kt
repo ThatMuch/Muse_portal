@@ -1,12 +1,12 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/rtc/join.py (_Writer, _Reader)
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/rtc/join.py (_Writer, _Reader)
 package com.portalmuse.core.rtc
 
 import java.io.ByteArrayOutputStream
 
 private const val MAX_DEPTH = 8
 
-/** Écriture Thrift « compact », juste ce qu'il faut pour un JOIN. */
+/** Thrift "compact" writing, just what a JOIN needs. */
 class ThriftWriter {
     private val out = ByteArrayOutputStream()
     private val last = ArrayList<Int>().apply { add(0) }
@@ -56,7 +56,7 @@ class ThriftWriter {
         last.removeAt(last.lastIndex)
     }
 
-    /** Termine la structure de tête ; la suivante recommence sa numérotation. */
+    /** Ends the top structure; the next one restarts its numbering. */
     fun stop() {
         out.write(0)
         last.clear()
@@ -66,18 +66,18 @@ class ThriftWriter {
     fun bytes(): ByteArray = out.toByteArray()
 }
 
-/** Lecture d'un petit message ; toute entrée mal formée lève [IllegalArgumentException]. */
+/** Reading a small message; any malformed input throws [IllegalArgumentException]. */
 class ThriftReader(private val data: ByteArray) {
     private var position = 0
     private var depth = 0
 
     private fun byte(): Int {
-        require(position < data.size) { "message thrift tronqué" }
+        require(position < data.size) { "truncated thrift message" }
         return data[position++].toInt() and 0xFF
     }
 
     private fun take(length: Long): ByteArray {
-        require(length >= 0 && length <= data.size - position) { "message thrift tronqué" }
+        require(length >= 0 && length <= data.size - position) { "truncated thrift message" }
         return data.copyOfRange(position, position + length.toInt()).also { position += length.toInt() }
     }
 
@@ -90,22 +90,22 @@ class ThriftReader(private val data: ByteArray) {
             if (byte and 0x80 == 0) return result
             shift += 7
         }
-        throw IllegalArgumentException("entier thrift trop long")
+        throw IllegalArgumentException("thrift integer too long")
     }
 
     private fun zigzag() = varint().let { (it ushr 1) xor -(it and 1) }
 
-    /** Chaque élément prend au moins un octet. */
+    /** Each element takes at least one byte. */
     private fun count(count: Long): Int {
-        require(count >= 0 && count <= data.size - position) { "conteneur thrift plus grand que son message" }
+        require(count >= 0 && count <= data.size - position) { "thrift container larger than its message" }
         return count.toInt()
     }
 
     private fun enter() {
-        require(++depth <= MAX_DEPTH) { "message thrift trop imbriqué" }
+        require(++depth <= MAX_DEPTH) { "thrift message nested too deeply" }
     }
 
-    /** Les champs par numéro. Les binaires sont des [ByteArray], les structures des [Map]. */
+    /** Fields by number. Binaries are [ByteArray], structures are [Map]. */
     fun struct(): Map<Int, Any?> {
         enter()
         val fields = HashMap<Int, Any?>()
@@ -124,7 +124,7 @@ class ThriftReader(private val data: ByteArray) {
     }
 
     private fun value(kind: Int, inContainer: Boolean): Any? = when (kind) {
-        // Le booléen d'un champ est dans son type ; celui d'un élément est un octet.
+        // A field's boolean is in its type; an element's is a byte.
         1, 2 -> if (inContainer) byte() == 1 else kind == 1
         3 -> byte()
         4, 5, 6 -> zigzag()
@@ -147,6 +147,6 @@ class ThriftReader(private val data: ByteArray) {
             }
         }
         12 -> struct()
-        else -> throw IllegalArgumentException("type thrift $kind inconnu")
+        else -> throw IllegalArgumentException("unknown thrift type $kind")
     }
 }

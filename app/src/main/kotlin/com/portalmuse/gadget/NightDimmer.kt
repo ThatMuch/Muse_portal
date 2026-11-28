@@ -8,9 +8,9 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 
 /**
- * Éteint la lumière : rétroéclairage à zéro et écran noir. Rien d'autre ne change : le kiosque
- * reste devant et l'écran « allumé » pour Android, qui ne met donc pas le Portal en veille ; la
- * session Muse et « Hey Muse » continuent. Aucune permission requise.
+ * Turns the light off: backlight at zero and black screen. Nothing else changes: the kiosk stays in front and
+ * the screen "on" for Android, which therefore does not put the Portal to sleep; the Muse session and "Hey
+ * Muse" carry on. No permission needed.
  */
 class NightDimmer(private val activity: Activity, root: FrameLayout) {
     private val veil = View(activity).apply {

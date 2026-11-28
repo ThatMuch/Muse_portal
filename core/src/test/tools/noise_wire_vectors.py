@@ -1,4 +1,4 @@
-# Produit des vecteurs d'octets avec le code Python du SDK (modules purs, sans dépendance).
+# Produces byte vectors with the SDK's Python code (pure modules, no dependency).
 import importlib.util, json, struct, sys, types
 noise_dir, out = sys.argv[1], sys.argv[2]
 pkg = types.ModuleType("sdknoise"); pkg.__path__ = [noise_dir]; sys.modules["sdknoise"] = pkg
@@ -22,4 +22,4 @@ doc = {
  "frame_empty": f.encode_noise_frames(b"", chunk_id=7)[0].hex(),
  "frame_big": [x.hex() for x in f.encode_noise_frames(big, chunk_id=1234567890123)],
 }
-json.dump(doc, open(out, "w"), indent=1); print("vecteurs :", len(doc) - 1)
+json.dump(doc, open(out, "w"), indent=1); print("vectors:", len(doc) - 1)

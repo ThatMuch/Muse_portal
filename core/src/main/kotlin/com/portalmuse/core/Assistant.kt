@@ -7,10 +7,10 @@ private const val MAX_FRAME_PHOTOS = 30
 private const val MAX_SHORTCUTS = 4
 private const val MINUTES_PER_DAY = 24 * 60
 
-/** Un bandeau court. */
+/** A short banner. */
 data class Notice(val message: String, val title: String?, val urgent: Boolean, val durationMillis: Long)
 
-/** Une demande de validation à l'écran. */
+/** An approval request on screen. */
 data class Question(
     val question: String,
     val details: String?,
@@ -19,23 +19,31 @@ data class Question(
     val timeoutMillis: Long,
 )
 
-/** [BUSY] : une autre demande attend déjà, ou l'écran est parti. */
+/** [BUSY]: another request is already waiting, or the screen is gone. */
 enum class AskResult { APPROVED, REJECTED, NO_ANSWER, BUSY }
 
-/** Un bouton d'accueil : le toucher envoie [message] à Muse au nom de l'utilisateur. */
+/** A home button: touching it sends [message] to Muse in the user's name. */
 data class Shortcut(val label: String, val message: String) {
     companion object {
         val DEFAULTS = listOf(
-            Shortcut("Brief du matin", "Donne-moi le brief du matin."),
-            Shortcut("Mon agenda", "Qu'y a-t-il à mon agenda aujourd'hui ?"),
-            Shortcut("Trafic", "Quel est le trafic sur mes trajets en ce moment ?"),
+            Shortcut(tr(
+                "Morning brief",
+                "Brief du matin",
+            ), tr("Give me the morning brief.", "Donne-moi le brief du matin.")),
+            Shortcut(tr(
+                "My calendar",
+                "Mon agenda",
+            ), tr("What is on my calendar today?", "Qu'y a-t-il à mon agenda aujourd'hui ?")),
+            Shortcut(tr("Traffic", "Trafic"), tr(
+                "What is the traffic on my routes right now?",
+                "Quel est le trafic sur mes trajets en ce moment ?",
+            )),
         )
     }
 }
 
 /**
- * Le mode nuit : des horaires fixes, qu'on peut forcer jusqu'au changement suivant.
- * Les heures sont en minutes depuis minuit.
+ * Night mode: fixed hours, which can be overridden until the next change. Times are in minutes since midnight.
  */
 data class NightSettings(
     val scheduled: Boolean = true,
@@ -54,7 +62,7 @@ data class NightSettings(
         }
     }
 
-    /** Sans horaires, le forçage reste jusqu'à nouvel ordre. */
+    /** Without a schedule, the override stays until further notice. */
     fun force(night: Boolean, minuteOfDay: Int, nowMillis: Long): NightSettings {
         if (!scheduled || startMinute == endMinute) return copy(forced = night, forcedUntil = Long.MAX_VALUE)
         fun wait(boundary: Int) = (boundary - minuteOfDay + MINUTES_PER_DAY - 1) % MINUTES_PER_DAY + 1
@@ -72,32 +80,32 @@ data class NightSettings(
     }
 }
 
-/** Ce que l'appareil sait faire au-delà de l'affichage simple. */
+/** What the device can do beyond plain display. */
 interface AssistantHost {
     fun isAvailable(): Boolean
 
-    /** Une photo prête à être enregistrée, dans la forme que [setFrame] attend. */
+    /** A photo ready to be saved, in the form [setFrame] expects. */
     fun loadPhoto(source: PictureSource): Any?
     fun notify(notice: Notice): Boolean
 
-    /** Bloque jusqu'au toucher ou à l'échéance. */
+    /** Blocks until a touch or the deadline. */
     fun ask(question: Question): AskResult
 
-    /** Une liste vide rétablit les boutons d'origine. */
+    /** An empty list restores the original buttons. */
     fun setShortcuts(shortcuts: List<Shortcut>)
 
-    /** Applique [change] et renvoie les réglages avec l'état courant. */
+    /** Applies [change] and returns the settings with the current state. */
     fun night(change: (NightSettings) -> NightSettings): Pair<NightSettings, Boolean>
 
-    /** Remplace les photos du cadre ; renvoie combien sont enregistrées. */
+    /** Replaces the frame photos; returns how many were saved. */
     fun setFrame(pictures: List<LoadedPicture>, idleMinutes: Int): Int
     fun clearFrame()
 }
 
-/** Bandeaux, validations, raccourcis, mode nuit et cadre photo, vus par Muse. */
+/** Banners, approvals, shortcuts, night mode and photo frame, as seen by Muse. */
 class AssistantCommands(
     private val host: AssistantHost,
-    /** (minutes depuis minuit, heure en millisecondes) */
+    /** (minutes since midnight, time in milliseconds) */
     private val now: () -> Pair<Int, Long>,
 ) : CommandSet {
     override fun specs(): Map<String, JSONObject> = linkedMapOf(
@@ -120,8 +128,8 @@ class AssistantCommands(
             JSONObject().put("question", Specs.field("string", "The decision, one sentence, up to 300 characters.")),
             JSONObject()
                 .put("details", Specs.field("string", "What exactly will happen, up to 800 characters."))
-                .put("approve_label", Specs.field("string", "Default Approuver."))
-                .put("reject_label", Specs.field("string", "Default Refuser."))
+                .put("approve_label", Specs.field("string", "Default: Approve, in the device's language."))
+                .put("reject_label", Specs.field("string", "Default: Reject, in the device's language."))
                 .put("timeout_s", Specs.field("integer", "10 to 600. Default 120.")),
         ).put("timeout_ms", ASK_TIMEOUT_MS),
         SHORTCUTS to Specs.of(
@@ -178,8 +186,8 @@ class AssistantCommands(
         val result = host.ask(
             Question(
                 question, Specs.text(params, "details", 800),
-                Specs.text(params, "approve_label", 20) ?: "Approuver",
-                Specs.text(params, "reject_label", 20) ?: "Refuser",
+                Specs.text(params, "approve_label", 20) ?: tr("Approve", "Approuver"),
+                Specs.text(params, "reject_label", 20) ?: tr("Reject", "Refuser"),
                 seconds * 1000,
             ),
         )

@@ -12,7 +12,7 @@ import java.io.IOException
 private const val TAG = "PortalMuse"
 private const val INDEX = "feed.json"
 
-/** Le dernier fil déposé par Muse, dans le stockage privé. Les images y sont des fichiers. */
+/** The last feed sent by Muse, in private storage. Pictures are files there. */
 object FeedStore {
     class Saved(val items: List<FeedItem>, val savedAt: Long)
 
@@ -24,7 +24,7 @@ object FeedStore {
         val work = File(directory.path + ".new")
         try {
             work.deleteRecursively()
-            if (!work.mkdirs()) throw IOException("dossier non créé")
+            if (!work.mkdirs()) throw IOException("folder not created")
             val list = JSONArray()
             items.forEachIndexed { index, item ->
                 val picture = (item.image as? ByteArray)?.let {
@@ -37,14 +37,14 @@ object FeedStore {
             }
             File(work, INDEX).writeText(JSONObject().put("at", System.currentTimeMillis()).put("items", list).toString())
             directory.deleteRecursively()
-            if (!work.renameTo(directory)) throw IOException("dossier non renommé")
+            if (!work.renameTo(directory)) throw IOException("folder not renamed")
         } catch (e: IOException) {
-            Log.w(TAG, "fil : enregistrement en échec (${e.javaClass.simpleName})")
+            Log.w(TAG, "feed: saving failed (${e.javaClass.simpleName})")
             work.deleteRecursively()
         }
     }
 
-    /** `null` sans fil. L'image de chaque élément est le [File] à afficher. */
+    /** `null` without a feed. Each item's image is the [File] to show. */
     @Synchronized
     fun load(context: Context): Saved? {
         val directory = directory(context)

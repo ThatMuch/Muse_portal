@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
@@ -24,14 +25,14 @@ import android.util.Size
 import java.io.ByteArrayOutputStream
 
 private const val TAG = "PortalMuse"
-/** La première caméra : l'autre est tenue par les services du Portal, qu'on ne dérange pas. */
+/** The first camera: the other one is held by the Portal's services, which we leave alone. */
 private const val CAMERA = "0"
 private const val PREVIEW_INTERVAL_MS = 90L
 
 /**
- * La caméra le temps d'une photo : aperçu image par image, puis une vue fixe. L'aperçu et la
- * photo passent par la même rotation, on voit donc ce qui partira. Rien n'est écrit sur disque.
- * Les rappels arrivent sur un fil propre à la caméra.
+ * The camera for the time of one photo: a frame by frame preview, then a still. Preview and photo go through
+ * the same rotation, so what you see is what will be sent. Nothing is written to disk. Callbacks arrive on a
+ * thread dedicated to the camera.
  */
 class CameraShot(
     private val context: Context,
@@ -49,7 +50,7 @@ class CameraShot(
     private var lastPreview = 0L
     @Volatile private var closed = false
 
-    /** L'autorisation de la caméra doit déjà être accordée. */
+    /** The camera permission must already be granted. */
     @SuppressLint("MissingPermission")
     fun open() = guarded {
         val manager = context.getSystemService(CameraManager::class.java)
@@ -72,9 +73,15 @@ class CameraShot(
                 guarded { startSession(camera) }
             }
 
-            override fun onDisconnected(camera: CameraDevice) = fail("la caméra a été reprise par le Portal")
+            override fun onDisconnected(camera: CameraDevice) = fail(tr(
+                "the Portal took the camera back",
+                "la caméra a été reprise par le Portal",
+            ))
 
-            override fun onError(camera: CameraDevice, error: Int) = fail("la caméra est indisponible (code $error)")
+            override fun onError(camera: CameraDevice, error: Int) = fail(tr(
+                "the camera is unavailable (code $error)",
+                "la caméra est indisponible (code $error)",
+            ))
         }, handler)
     }
 
@@ -92,19 +99,28 @@ class CameraShot(
                 }
             }
 
-            override fun onConfigureFailed(configured: CameraCaptureSession) = fail("la caméra refuse ce réglage")
+            override fun onConfigureFailed(configured: CameraCaptureSession) = fail(tr(
+                "the camera refuses this setting",
+                "la caméra refuse ce réglage",
+            ))
         }, handler)
     }
 
     fun take() {
         handler.post {
             guarded {
-                val camera = device ?: return@guarded fail("la caméra n'est pas prête")
+                val camera = device ?: return@guarded fail(tr(
+                    "the camera is not ready",
+                    "la caméra n'est pas prête",
+                ))
                 val request = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
                 request.addTarget(still!!.surface)
                 request.set(CaptureRequest.JPEG_QUALITY, 90.toByte())
                 request.set(CaptureRequest.JPEG_ORIENTATION, 0)
-                session?.capture(request.build(), null, handler) ?: fail("la caméra n'est pas prête")
+                session?.capture(request.build(), null, handler) ?: fail(tr(
+                    "the camera is not ready",
+                    "la caméra n'est pas prête",
+                ))
             }
         }
     }
@@ -127,7 +143,7 @@ class CameraShot(
         photo.use {
             val buffer = it.planes[0].buffer
             val bytes = ByteArray(buffer.remaining()).also(buffer::get)
-            decode(bytes)?.let(onPhoto) ?: fail("photo illisible")
+            decode(bytes)?.let(onPhoto) ?: fail(tr("unreadable photo", "photo illisible"))
         }
     }
 
@@ -139,7 +155,7 @@ class CameraShot(
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    /** Les trois plans d'une image YUV rangés en NV21, quels que soient leurs pas. */
+    /** The three planes of a YUV image laid out as NV21, whatever their strides. */
     private fun nv21(image: Image): ByteArray {
         val width = image.width
         val height = image.height
@@ -166,10 +182,10 @@ class CameraShot(
         try {
             action()
         } catch (e: CameraAccessException) {
-            fail("la caméra est indisponible")
+            fail(tr("the camera is unavailable", "la caméra est indisponible"))
         } catch (e: RuntimeException) {
-            Log.w(TAG, "photo : ${e.javaClass.simpleName}")
-            fail("la caméra est indisponible")
+            Log.w(TAG, "photo: ${e.javaClass.simpleName}")
+            fail(tr("the camera is unavailable", "la caméra est indisponible"))
         }
     }
 

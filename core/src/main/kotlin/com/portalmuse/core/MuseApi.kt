@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/muse_api.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/muse_api.py
 package com.portalmuse.core
 
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,19 +15,19 @@ class Vm(val url: String, val authToken: String, val name: String, val id: Strin
     override fun toString() = "Vm(id=$id)"
 }
 
-/** [status] vaut `null` si aucune réponse HTTP n'est arrivée (à réessayer). */
+/** [status] is `null` if no HTTP response arrived (retry). */
 class VmLookup(val vms: List<Vm>, val status: Int?)
 
 class DeviceTokens(val accessToken: String, val refreshToken: String) {
-    override fun toString() = "DeviceTokens(<masqué>)"
+    override fun toString() = "DeviceTokens(<hidden>)"
 }
 
-/** [status] 401 : l'appairage n'existe plus. `null` : panne de transport. */
+/** [status] 401: the pairing no longer exists. `null`: transport failure. */
 class TokenRefresh(val tokens: DeviceTokens?, val status: Int?)
 
-/** Client de l'API appareil de Muse. [client] porte le magasin de confiance filtré. */
+/** Client of Muse's device API. [client] carries the filtered trust store. */
 class MuseApi(client: OkHttpClient, private val userAgent: String) {
-    // Aucune redirection : les jetons ne vont qu'aux hôtes autorisés.
+    // No redirects: tokens only go to the allowed hosts.
     private val http = client.newBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
@@ -46,12 +46,12 @@ class MuseApi(client: OkHttpClient, private val userAgent: String) {
             http.newCall(request).execute().use { response ->
                 status = response.code
                 if (!response.isSuccessful) {
-                    log("liste des VM refusée : HTTP ${response.code}")
+                    log("VM list refused: HTTP ${response.code}")
                     return VmLookup(emptyList(), status)
                 }
                 val data = JSONObject(response.peekBody(MAX_BODY_BYTES).string())
                 if (data.optString("error_title").isNotEmpty() || data.optString("backend_error_code").isNotEmpty()) {
-                    log("liste des VM : erreur signalée par l'API")
+                    log("VM list: error reported by the API")
                     return VmLookup(emptyList(), status)
                 }
                 val list = data.optJSONArray("vm_list") ?: return VmLookup(emptyList(), status)
@@ -62,30 +62,30 @@ class MuseApi(client: OkHttpClient, private val userAgent: String) {
                     if (url.isEmpty() || token.isEmpty()) return@mapNotNull null
                     Vm(url, token, entry.optString("vm_name"), entry.optString("vm_id"), entry.optBoolean("default"))
                 }
-                log("liste des VM : ${vms.size}")
+                log("VM list: ${vms.size}")
                 return VmLookup(vms, status)
             }
         } catch (e: IOException) {
-            log("liste des VM injoignable : ${e.javaClass.simpleName}")
+            log("VM list unreachable: ${e.javaClass.simpleName}")
         } catch (e: JSONException) {
-            log("liste des VM : réponse illisible")
+            log("VM list: unreadable answer")
         } catch (e: IllegalArgumentException) {
-            // Le message de l'exception pourrait contenir le jeton : ne pas le journaliser.
-            log("liste des VM : jeton mal formé")
+            // The exception's message could contain the token: do not log it.
+            log("VM list: malformed token")
         }
         return VmLookup(emptyList(), status)
     }
 
     /**
-     * Rotation de la paire de jetons avec le jeton de rafraîchissement. Le jeton d'accès n'est
-     * jamais présenté : le serveur pourrait répondre 200 avec des jetons inutilisables.
+     * Rotates the token pair with the refresh token. The access token is never presented: the server could
+     * answer 200 with unusable tokens.
      */
     fun refresh(
         refreshToken: String, deviceId: String, apiUrlV2: String, sdkToken: String?, log: (String) -> Unit = {},
     ): TokenRefresh {
         var status: Int? = null
         try {
-            // Certains jetons arrivent déjà préfixés : le doubler les fait refuser.
+            // Some tokens arrive already prefixed: doubling it gets them refused.
             val raw = refreshToken.substringAfterLast(':')
             val body = JSONObject().put("device_id", deviceId)
             if (!sdkToken.isNullOrEmpty()) body.put("sdk_token", sdkToken)
@@ -98,7 +98,7 @@ class MuseApi(client: OkHttpClient, private val userAgent: String) {
             http.newCall(request).execute().use { response ->
                 status = response.code
                 if (!response.isSuccessful) {
-                    log("renouvellement refusé : HTTP ${response.code}")
+                    log("refresh refused: HTTP ${response.code}")
                     return TokenRefresh(null, status)
                 }
                 var data = JSONObject(response.peekBody(MAX_BODY_BYTES).string())
@@ -106,24 +106,24 @@ class MuseApi(client: OkHttpClient, private val userAgent: String) {
                 val access = data.optString("access_token")
                 val refresh = data.optString("refresh_token")
                 if (access.isNotEmpty() && refresh.isNotEmpty()) return TokenRefresh(DeviceTokens(access, refresh), status)
-                log("réponse de renouvellement sans jetons")
+                log("refresh answer without tokens")
             }
         } catch (e: IOException) {
-            log("renouvellement injoignable : ${e.javaClass.simpleName}")
+            log("refresh unreachable: ${e.javaClass.simpleName}")
         } catch (e: JSONException) {
-            log("renouvellement : réponse illisible")
+            log("refresh: unreadable answer")
         } catch (e: IllegalArgumentException) {
-            log("renouvellement : jeton mal formé")
+            log("refresh: malformed token")
         }
         return TokenRefresh(null, status)
     }
 
-    /** Requête sans jeton : un statut HTTP, quel qu'il soit, prouve que le réseau et TLS passent. */
+    /** Request without a token: any HTTP status proves that the network and TLS work. */
     fun probe(): String = try {
         http.newCall(Request.Builder().url("$API_BASE/").header("User-Agent", userAgent).head().build())
-            .execute().use { "joignable (HTTP ${it.code})" }
+            .execute().use { tr("reachable (HTTP ${it.code})", "joignable (HTTP ${it.code})") }
     } catch (e: IOException) {
-        "injoignable (${e.javaClass.simpleName})"
+        tr("unreachable (${e.javaClass.simpleName})", "injoignable (${e.javaClass.simpleName})")
     }
 
     companion object {
@@ -131,7 +131,7 @@ class MuseApi(client: OkHttpClient, private val userAgent: String) {
         private const val TIMEOUT_S = 15L
         private const val MAX_BODY_BYTES = 1L shl 20
 
-        /** `api_url_v2` s'il est autorisé, sinon l'API Muse. `api_url` est ignoré. */
+        /** `api_url_v2` if it is allowed, otherwise the Muse API. `api_url` is ignored. */
         fun apiRoot(apiUrlV2: String): String =
             apiUrlV2.takeIf { it.isNotEmpty() && ServerHosts.apiAllowed(it) }?.trimEnd('/') ?: API_BASE
     }

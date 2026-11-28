@@ -11,21 +11,21 @@ import java.io.IOException
 private const val TAG = "PortalMuse"
 private const val META = "meta.json"
 
-/** Les photos du cadre et le délai avant qu'il s'affiche. */
+/** The frame photos and the delay before the frame shows. */
 class Frame(val photos: List<Pair<File, String?>>, val idleMinutes: Int)
 
-/** Les photos du cadre, dans le stockage privé de l'app. */
+/** The frame photos, in the app's private storage. */
 object FrameStore {
     private fun directory(context: Context) = File(context.applicationContext.filesDir, "frame")
 
-    /** Remplace tout le contenu ; renvoie le nombre de photos enregistrées (0 en cas d'échec). */
+    /** Replaces the whole content; returns the number of photos saved (0 on failure). */
     @Synchronized
     fun save(context: Context, photos: List<Pair<ByteArray, String?>>, idleMinutes: Int): Int {
         val directory = directory(context)
         val work = File(directory.path + ".new")
         return try {
             work.deleteRecursively()
-            if (!work.mkdirs()) throw IOException("dossier non créé")
+            if (!work.mkdirs()) throw IOException("folder not created")
             val list = JSONArray()
             photos.forEachIndexed { index, (bytes, caption) ->
                 val name = "%02d.jpg".format(index)
@@ -34,16 +34,16 @@ object FrameStore {
             }
             File(work, META).writeText(JSONObject().put("idle_minutes", idleMinutes).put("photos", list).toString())
             directory.deleteRecursively()
-            if (!work.renameTo(directory)) throw IOException("dossier non renommé")
+            if (!work.renameTo(directory)) throw IOException("folder not renamed")
             photos.size
         } catch (e: IOException) {
-            Log.w(TAG, "cadre photo : enregistrement en échec (${e.javaClass.simpleName})")
+            Log.w(TAG, "photo frame: saving failed (${e.javaClass.simpleName})")
             work.deleteRecursively()
             0
         }
     }
 
-    /** `null` sans photos. */
+    /** `null` without photos. */
     @Synchronized
     fun load(context: Context): Frame? {
         val directory = directory(context)

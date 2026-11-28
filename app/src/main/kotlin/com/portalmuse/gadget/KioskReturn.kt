@@ -9,19 +9,19 @@ import com.portalmuse.core.RestartGuard
 private const val TAG = "PortalMuse"
 
 /**
- * Rouvre le kiosque quand l'application a disparu pendant qu'il était à l'écran : plantage,
- * processus tué ou mise à jour. Quitter le kiosque ou passer à l'écran du Portal ne le fait pas
- * revenir. Demande l'autorisation « Afficher par-dessus les autres applications ».
+ * Reopens the kiosk when the app disappeared while it was on screen: crash, killed process or update. Leaving
+ * the kiosk or switching to the Portal's screen does not bring it back. Needs the "Display over other apps"
+ * permission.
  */
 object KioskReturn {
     private fun prefs(context: Context) = context.getSharedPreferences("kiosk", Context.MODE_PRIVATE)
 
-    /** Écrit tout de suite : un plantage peut suivre. */
+    /** Written at once: a crash may follow. */
     fun inFront(context: Context, shown: Boolean) {
         prefs(context).edit().putBoolean("front", shown).commit()
     }
 
-    /** [afterUpdate] : une mise à jour n'est pas une panne et ne compte pas dans la limite. */
+    /** [afterUpdate]: an update is not a failure and does not count toward the limit. */
     fun reopen(context: Context, afterUpdate: Boolean = false) {
         val prefs = prefs(context)
         if (!prefs.getBoolean("front", false)) return
@@ -30,12 +30,12 @@ object KioskReturn {
             val history = prefs.getString("reopened", "").orEmpty().split(',').mapNotNull { it.toLongOrNull() }
             val next = RestartGuard.allow(history, System.currentTimeMillis())
             if (next == null) {
-                Log.w(TAG, "kiosque : trop de réouvertures, on s'arrête là")
+                Log.w(TAG, "kiosk: too many reopenings, stopping there")
                 return
             }
             prefs.edit().putString("reopened", next.joinToString(",")).commit()
         }
-        Log.i(TAG, "kiosque : réouverture")
+        Log.i(TAG, "kiosk: reopening")
         context.startActivity(Intent(context, KioskActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

@@ -34,7 +34,7 @@ class MuseConnectionTest {
     private fun record(savedAt: Long = now, refresh: String = "hatch_refresh:r1") =
         PairingRecord("a1", refresh, "u", "", "", "", savedAt, "homelink-abcdef")
 
-    /** Réponses HTTP successives par chemin ; la dernière se répète. 0 = panne réseau. */
+    /** Successive HTTP answers by path; the last one repeats. 0 = network failure. */
     private class Server(val fetch: MutableList<Pair<Int, String>>, val refresh: MutableList<Pair<Int, String>>) {
         val calls = mutableListOf<String>()
         val bodies = mutableListOf<String>()
@@ -59,7 +59,7 @@ class MuseConnectionTest {
 
     private class Run(val delays: MutableList<Long>, val connects: MutableList<Pair<String, String>>, val states: MutableList<ConnectionState>)
 
-    /** Fait tourner la boucle jusqu'à [sleeps] attentes. [session] joue chaque connexion réussie. */
+    /** Runs the loop up to [sleeps] waits. [session] plays each successful connection. */
     private fun run(
         store: Store, server: Server, sleeps: Int,
         connect: (Int) -> Outcome = { Outcome.CLOSED }, healthyFor: (Int) -> Long = { 0 },
@@ -207,7 +207,7 @@ class MuseConnectionTest {
         assertEquals(3, result.delays.size)
     }
 
-    /** Appairage effacé pendant l'ouverture : la session ne doit pas rester en place. */
+    /** Pairing erased during opening: the session must not stay in place. */
     @Test fun aDropWhileConnectingStopsTheNewSession() {
         var stops = 0
         lateinit var connection: MuseConnection

@@ -10,7 +10,7 @@ android {
     defaultConfig {
         applicationId = "com.portalmuse.gadget"
         minSdk = 29
-        // Le skill "portal" de Meta recommande 29, la version du Portal 10".
+        // Meta's "portal" skill recommends 29, the version of the Portal 10".
         targetSdk = 29
         versionCode = 31
         versionName = "1.0.0"
@@ -20,7 +20,7 @@ android {
         }
     }
 
-    // Détecteur « Hey Muse » ; lancer d'abord tools/preparer-reveil.sh.
+    // The "Hey Muse" detector; run tools/prepare-wakeword.sh first.
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -30,8 +30,8 @@ android {
 
     buildTypes {
         release {
-            // La même clé que la version de développement : la mise à jour garde l'appairage et les
-            // réglages. L'app n'est jamais publiée ; ce qui change est qu'elle n'est plus débogable.
+            // The same key as the development build: updating keeps the pairing and settings. The app is never
+            // published; what changes is that it is no longer debuggable.
             signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
         }
@@ -43,7 +43,7 @@ android {
     }
 
     lint {
-        // App installée à la main, jamais publiée sur un store.
+        // App installed by hand, never published on a store.
         disable += "ExpiredTargetSdkVersion"
     }
 

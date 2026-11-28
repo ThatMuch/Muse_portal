@@ -1,5 +1,6 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.tr
 import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
@@ -44,13 +45,13 @@ private const val MODEL_ID = "portalmuse-portal-10"
 private const val MODEL_NAME = "Portal 10 inch (DIY client)"
 private const val AVATAR_REFRESH_MS = 30 * 60_000L
 
-/** État de la session Muse, pour l'écran « Informations » et la notification. */
+/** State of the Muse session, for the "Information" screen and the notification. */
 object MuseStatus {
     @Volatile
-    var text = "pas démarrée"
+    var text = tr("not started", "pas démarrée")
 }
 
-/** La session en cours, pour converser depuis l'écran. */
+/** The current session, to chat from the screen. */
 object MuseSession {
     @Volatile
     private var current: Pair<LinkSession, String>? = null
@@ -63,27 +64,27 @@ object MuseSession {
         current = null
     }
 
-    /** La session ouverte, s'il y en a une. */
+    /** The open session, if there is one. */
     fun live(): LinkSession? = current?.first?.takeIf { it.isOpen }
 
-    /** `null` si aucune session n'est ouverte. [sideChat] : une conversation à part. */
+    /** `null` if no session is open. [sideChat]: a separate conversation. */
     fun chat(sideChat: String? = null): MuseChat? = current?.takeIf { it.first.isOpen }?.let {
-        MuseChat(it.first, it.second, log = { line -> Log.i(TAG, "conversation : $line") }, sideChat = sideChat)
+        MuseChat(it.first, it.second, log = { line -> Log.i(TAG, "conversation: $line") }, sideChat = sideChat)
     }
 }
 
-/** La connexion permanente à Muse : un fil dédié, réveillé par les changements de réseau. */
+/** The permanent connection to Muse: a dedicated thread, woken by network changes. */
 class MuseLink(context: Context, private val onStatus: (String) -> Unit, private val onRevoked: () -> Unit) {
     private val context = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val secrets = SecretStore(this.context)
-    // Plusieurs fils : une question en attente ou un chargement d'images ne retarde pas le reste.
+    // Several threads: a pending question or loading pictures does not delay the rest.
     private val commandExecutor = Executors.newFixedThreadPool(4)
     private var connection: MuseConnection? = null
     private var revoked = false
     private var network: Network? = null
 
-    /** L'avatar peut changer chaque jour : revu à la connexion puis toutes les 30 minutes. */
+    /** The avatar can change every day: checked at connection, then every 30 minutes. */
     private val refreshAvatar = object : Runnable {
         override fun run() {
             MuseSession.live()?.let { session -> thread(name = "muse-avatar") { AvatarStore.sync(context, session) } }
@@ -93,14 +94,14 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(available: Network) {
-            // Changement de réseau : l'ancienne session est morte sans le savoir.
+            // Network change: the old session is dead without knowing it.
             if (network != null && network != available) connection?.drop()
             network = available
             connection?.wake()
         }
 
         override fun onLost(lost: Network) {
-            Log.i(TAG, "réseau perdu")
+            Log.i(TAG, "network lost")
             network = null
             connection?.drop()
         }
@@ -110,8 +111,8 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
         val api = try {
             MuseHttp.api(context)
         } catch (e: Exception) {
-            Log.e(TAG, "TLS indisponible : ${e.javaClass.simpleName}")
-            return publish("TLS indisponible sur cet appareil")
+            Log.e(TAG, "TLS unavailable: ${e.javaClass.simpleName}")
+            return publish(tr("TLS unavailable on this device", "TLS indisponible sur cet appareil"))
         }
         val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
         val guide = context.assets.open("guide.md").bufferedReader().use { it.readText() }
@@ -119,10 +120,10 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
             val client = try {
                 MuseHttp.client
             } catch (e: Exception) {
-                throw IOException("TLS indisponible")
+                throw IOException("TLS unavailable")
             }
             val socket = OkHttpFrameSocket.connect(client, url, bearer, MuseHttp.userAgent(context))
-            // Reconstruites à chaque session : la déclaration suit l'autorisation du moment.
+            // Rebuilt for each session: the declaration follows the current permissions.
             val screen = ScreenBridge(context)
             val onScreen = if (Settings(context).screenAllowed) {
                 arrayOf(
@@ -153,7 +154,7 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
                 onRegistered = {
                     MuseSession.attach(session, nodeId)
                     onRegistered()
-                    // Hors du fil de réception, qui doit rester libre pour lire la réponse.
+                    // Off the receiving thread, which must stay free to read the answer.
                     thread(name = "muse-name") {
                         val crash = CrashRecorder.pending(context)
                         if (crash != null && Settings(context).crashReports && session.report(crash.message())) {
@@ -182,7 +183,7 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
         thread(name = "muse-link") { created.run() }
     }
 
-    /** L'appairage vient d'être refait ou effacé. */
+    /** The pairing has just been redone or erased. */
     fun pairingChanged() {
         revoked = false
         connection?.drop()
@@ -204,13 +205,22 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
     private fun onState(state: ConnectionState) {
         if (state != ConnectionState.Connected) ScreenBridge.cancelQuestion()
         val text = when (state) {
-            ConnectionState.NotPaired -> if (revoked) "appairage retiré par Muse" else "non appairé"
-            ConnectionState.Connecting -> "connexion en cours"
+            ConnectionState.NotPaired -> if (revoked) tr(
+                "pairing removed by Muse",
+                "appairage retiré par Muse",
+            ) else tr("not paired", "non appairé")
+            ConnectionState.Connecting -> tr("connecting", "connexion en cours")
             ConnectionState.Connected -> {
                 revoked = false
-                "connectée depuis ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date())}"
+                tr(
+                    "connected since ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date())}",
+                    "connectée depuis ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date())}",
+                )
             }
-            is ConnectionState.Waiting -> "nouvel essai dans ${state.delayMillis / 1000} s (${state.reason})"
+            is ConnectionState.Waiting -> tr(
+                "retrying in ${state.delayMillis / 1000} s (${state.reason})",
+                "nouvel essai dans ${state.delayMillis / 1000} s (${state.reason})",
+            )
             ConnectionState.Revoked -> {
                 revoked = true
                 AvatarStore.clear(context)
@@ -222,7 +232,7 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
                 Settings(context).forgetBluetoothDevices()
                 Settings(context).customShortcuts = emptyList()
                 main.post(onRevoked)
-                "appairage retiré par Muse"
+                tr("pairing removed by Muse", "appairage retiré par Muse")
             }
         }
         publish(text)
@@ -233,7 +243,7 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
         main.post { onStatus(text) }
     }
 
-    /** La description de l'écran, jointe au guide pour que Muse ajuste pages et images. */
+    /** The description of the screen, added to the guide so that Muse fits pages and pictures. */
     private fun board(): JSONObject {
         val screen = context.resources.displayMetrics
         return JSONObject().put(
@@ -243,7 +253,7 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
         )
     }
 
-    /** `device.health` : l'état de la machine, sans nom, adresse ni contenu affiché. */
+    /** `device.health`: the state of the machine, without names, addresses or displayed content. */
     private fun health(version: String): JSONObject {
         val memory = ActivityManager.MemoryInfo()
         context.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)

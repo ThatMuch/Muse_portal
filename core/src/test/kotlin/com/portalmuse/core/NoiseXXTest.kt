@@ -31,7 +31,7 @@ class NoiseXXTest {
 
         val (send, receive) = init.split()
         val noAd = ByteArray(0)
-        // Messages de transport : le répondeur commence, puis alternance.
+        // Transport messages: the responder starts, then they alternate.
         assertArrayEquals(message("transport", 0, "payload"), receive.decryptWithAd(noAd, message("transport", 0, "ciphertext")))
         assertArrayEquals(message("transport", 1, "ciphertext"), send.encryptWithAd(noAd, message("transport", 1, "payload")))
         assertArrayEquals(message("transport", 2, "payload"), receive.decryptWithAd(noAd, message("transport", 2, "ciphertext")))

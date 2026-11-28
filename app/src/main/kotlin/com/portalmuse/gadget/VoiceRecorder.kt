@@ -13,19 +13,19 @@ import kotlin.math.sqrt
 
 private const val TAG = "PortalMuse"
 private const val SAMPLE_RATE = 16_000
-/** 100 ms de son en 16 bits mono. */
+/** 100 ms of 16 bit mono sound. */
 private const val BLOCK_BYTES = SAMPLE_RATE / 10 * 2
-private const val MAX_BLOCKS = 300 // 30 secondes
-private const val SILENCE_BLOCKS = 20 // 2 secondes après la parole
-private const val NO_SPEECH_BLOCKS = 80 // 8 secondes sans rien entendre
+private const val MAX_BLOCKS = 300 // 30 seconds
+private const val SILENCE_BLOCKS = 20 // 2 seconds after speech
+private const val NO_SPEECH_BLOCKS = 80 // 8 seconds without hearing anything
 private const val MIN_SPEECH_LEVEL = 400.0
 private const val DIGITAL_SILENCE = 10.0
-/** Plafond du seuil : quelqu'un qui parle dès le premier bloc fausse la mesure du fond. */
+/** Ceiling of the threshold: someone speaking from the first block skews the background measurement. */
 private const val MAX_SPEECH_THRESHOLD = 1_500.0
 
 /**
- * Enregistre une note vocale, seulement entre [start] et l'arrêt. L'écoute s'arrête d'elle-même
- * après un silence qui suit la parole.
+ * Records a voice note, only between [start] and the stop. Listening stops by itself after a silence that
+ * follows speech.
  */
 class VoiceRecorder(
     private val onLevel: (Float) -> Unit,
@@ -33,7 +33,7 @@ class VoiceRecorder(
 ) {
     sealed class Result {
         class Audio(val pcm: ByteArray, val sampleRate: Int) : Result()
-        /** Que des zéros : micro coupé sur le Portal, ou refusé au système. */
+        /** Nothing but zeros: microphone muted on the Portal, or denied by the system. */
         object Muted : Result()
         object NothingHeard : Result()
         object Failed : Result()
@@ -44,7 +44,7 @@ class VoiceRecorder(
     @Volatile private var finish = false
     @Volatile private var cancelled = false
 
-    /** Termine l'écoute et envoie ce qui a été entendu. */
+    /** Ends listening and sends what was heard. */
     fun finish() {
         finish = true
     }
@@ -53,14 +53,14 @@ class VoiceRecorder(
         cancelled = true
     }
 
-    /** À appeler seulement une fois l'autorisation du micro accordée. */
+    /** Only call once the microphone permission is granted. */
     @SuppressLint("MissingPermission")
     fun start() {
         thread(name = "voice") {
             val result = try {
                 record()
             } catch (e: RuntimeException) {
-                Log.e(TAG, "micro en échec : ${e.javaClass.simpleName}")
+                Log.e(TAG, "microphone failed: ${e.javaClass.simpleName}")
                 Result.Failed
             }
             main.post { if (!cancelled) onDone(result) }
@@ -93,8 +93,8 @@ class VoiceRecorder(
                 blocks++
                 val level = level(block, read)
                 loudest = maxOf(loudest, level)
-                // Le bruit de fond est le bloc le plus calme entendu jusqu'ici.
-                // Les premiers blocs du Portal sont un silence numérique, pas le bruit de la pièce.
+                // The background noise is the quietest block heard so far. The Portal's first blocks are
+                // digital silence, not the noise of the room.
                 if (level > DIGITAL_SILENCE) floor = minOf(floor, level)
                 main.post { if (!cancelled) onLevel((level / 4000).toFloat().coerceIn(0f, 1f)) }
                 if (level > (floor * 3).coerceIn(MIN_SPEECH_LEVEL, MAX_SPEECH_THRESHOLD)) {
@@ -106,10 +106,11 @@ class VoiceRecorder(
                 if (spoke && quiet >= SILENCE_BLOCKS) break
                 if (!spoke && blocks >= NO_SPEECH_BLOCKS) break
             }
-            // Niveaux seulement, jamais le son : utile pour régler les seuils.
-            Log.i(TAG, "écoute : ${blocks / 10.0} s, niveau max ${loudest.toInt()}, fond ${floor.toInt()}, parole $spoke")
+            // Levels only, never the sound: useful to tune the thresholds.
+            Log.i(TAG, "listening: ${blocks / 10.0} s, max level ${loudest.toInt()}, floor " +
+                "${floor.toInt()}, speech $spoke")
             if (loudest == 0.0) return Result.Muted
-            // Un toucher sur « Envoyer » fait foi, même si la détection n'a rien reconnu.
+            // A touch on "Send" is authoritative, even if detection recognized nothing.
             if (!spoke && !finish) return Result.NothingHeard
             return Result.Audio(audio.toByteArray(), SAMPLE_RATE)
         } finally {
@@ -117,7 +118,7 @@ class VoiceRecorder(
         }
     }
 
-    /** Valeur efficace du bloc. */
+    /** Root mean square of the block. */
     private fun level(block: ByteArray, length: Int): Double {
         var sum = 0.0
         for (i in 0 until length - 1 step 2) {

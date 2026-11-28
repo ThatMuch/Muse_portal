@@ -26,7 +26,7 @@ class VoiceCallTest {
         executor.shutdownNow()
     }
 
-    /** 40 ms à 24 kHz : un ton audible. */
+    /** 40 ms at 24 kHz: an audible tone. */
     private val tone: ByteArray = ByteBuffer.allocate(1920).order(ByteOrder.LITTLE_ENDIAN).apply {
         repeat(960) { putShort((2000 * Math.sin(2 * Math.PI * 440 * it / 24000)).toInt().toShort()) }
     }.array()
@@ -87,7 +87,7 @@ class VoiceCallTest {
         fun nextData(): ServiceFrame.BodyChunk = checkNotNull(vm.duplexData.poll(3, TimeUnit.SECONDS)) { "rien envoyé" }
         fun nextEvent() = JSONObject(String(nextData().data))
 
-        /** Lit l'ouverture de l'appel. */
+        /** Reads the opening of the call. */
         fun admit(status: Int = 200) {
             val request = checkNotNull(vm.duplexOpened.poll(3, TimeUnit.SECONDS))
             media = request.streamId
@@ -103,7 +103,7 @@ class VoiceCallTest {
 
         fun server(vararg records: JSONObject) {
             val raw = records.joinToString("") { "$it\n" }.toByteArray()
-            // Découpes arbitraires, comme sur le réseau.
+            // Arbitrary splits, as on the network.
             for (offset in raw.indices step 997) {
                 vm.sendFrame(ServiceFrame.BodyChunk(media, raw.copyOfRange(offset, minOf(offset + 997, raw.size))))
             }
@@ -187,7 +187,7 @@ class VoiceCallTest {
         call.hangUp()
         endCall()
         result()
-        val summary = logs.single { it.startsWith("bilan") }
+        val summary = logs.single { it.startsWith("summary") }
         assertTrue(summary, "hatch.voice.session x1" in summary && "continuous_audio_video.delta x1" in summary)
         assertTrue(summary, "secret" !in summary)
     }
@@ -204,7 +204,7 @@ class VoiceCallTest {
         assertTrue(CallEvent.Ignored("i1") in events)
         call.hangUp()
         result()
-        val line = logs.single { it.startsWith("parole écartée") }
+        val line = logs.single { it.startsWith("speech dropped") }
         assertTrue(line, "reason=side_speech" in line && "note" in line)
         assertTrue(logs.none { "privé" in it || "quelle heure" in it || "bonjour" in it })
     }
@@ -248,7 +248,7 @@ class VoiceCallTest {
     @Test fun theMicrophoneIsMutedWhileMuseSpeaks() = with(Run()) {
         connect()
         nextEvent()
-        // 2 s de parole.
+        // 2 s of speech.
         server(delta(ByteArray(96_000) { tone[it % tone.size] }))
         eventually("parole signalée") { CallEvent.Speaking(true) in events }
         Thread.sleep(150)
@@ -306,7 +306,7 @@ class VoiceCallTest {
         assertEquals(CallResult.Ended(CallEnd.IDLE), result())
     }
 
-    /** Fausse alerte du mot d'activation : du bruit, mais aucune demande reconnue. */
+    /** False alarm of the wake word: noise, but no request recognized. */
     @Test fun aWakeCallWithoutAnyRequestEndsQuickly() = with(Run(firstTurn = 500)) {
         connect()
         server(event("input_audio_buffer.speech_started").put("item_id", "i"), event("hatch.voice.input_suppressed").put("item_id", "i"))
@@ -324,7 +324,7 @@ class VoiceCallTest {
 
     @Test fun roomNoiseDoesNotKeepACallAlive() = with(Run(idle = 500, loudRoom = true)) {
         connect()
-        // Une télévision : du son, des débuts de parole écartés, mais aucun échange.
+        // A television: sound, dropped starts of speech, but no exchange.
         server(event("input_audio_buffer.speech_started").put("item_id", "tv"), event("hatch.voice.input_suppressed").put("item_id", "tv"))
         endCall()
         assertEquals(CallResult.Ended(CallEnd.IDLE), result())

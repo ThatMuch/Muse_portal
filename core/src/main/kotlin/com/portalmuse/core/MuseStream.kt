@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/link_client.py (_Request, HttpStream)
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/link_client.py (_Request, HttpStream)
 package com.portalmuse.core
 
 import java.io.IOException
@@ -9,15 +9,15 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 
-/** Requêtes HTTP portées par une session Muse enregistrée. */
+/** HTTP requests carried by a registered Muse session. */
 interface MuseStreams {
     @Throws(IOException::class)
     fun open(service: ServiceType, verb: String, path: String, headers: List<Pair<String, String>>, body: ByteArray): MuseStream
 }
 
 /**
- * La réponse à une requête : statut puis corps par morceaux. La session l'alimente sans jamais
- * se bloquer ; [close] annule la requête si elle n'est pas terminée.
+ * The answer to a request: status then body in chunks. The session feeds it without ever blocking; [close]
+ * cancels the request if it is not finished.
  */
 class MuseStream internal constructor(
     val id: Long, private val maxBufferedBytes: Int, private val cancel: (MuseStream) -> Unit,
@@ -36,34 +36,34 @@ class MuseStream internal constructor(
     @Volatile var ended = false
         private set
 
-    /** Les en-têtes de la réponse, noms en minuscules ; disponibles après [awaitStatus]. */
+    /** The response headers, names in lower case; available after [awaitStatus]. */
     @Volatile var headers: Map<String, String> = emptyMap()
         private set
 
-    /** Appelé par la boucle de réception seulement. */
+    /** Called by the receive loop only. */
     internal fun receive(frame: ServiceFrame) {
         if (ended) return
         val (data, last) = when (frame) {
             is ServiceFrame.Response -> {
-                if (headSeen || frame.status !in 100..599) return fail("en-tête de réponse invalide")
+                if (headSeen || frame.status !in 100..599) return fail("invalid response header")
                 headSeen = true
                 headers = frame.headers.associate { it.first.lowercase() to it.second }
                 items.add(Item.Head(frame.status))
                 frame.body to frame.endBody
             }
             is ServiceFrame.BodyChunk -> {
-                if (!headSeen) return fail("corps reçu avant l'en-tête")
+                if (!headSeen) return fail("body received before the header")
                 frame.data to frame.endBody
             }
             is ServiceFrame.Reset -> {
                 ended = true
-                items.add(Item.Broken("flux réinitialisé (code ${frame.code})"))
+                items.add(Item.Broken("stream reset (code ${frame.code})"))
                 return
             }
-            is ServiceFrame.Request -> return fail("requête inattendue")
+            is ServiceFrame.Request -> return fail("unexpected request")
         }
         if (data.isNotEmpty()) {
-            if (buffered.addAndGet(data.size) > maxBufferedBytes) return fail("réponse non consommée")
+            if (buffered.addAndGet(data.size) > maxBufferedBytes) return fail("response not consumed")
             items.add(Item.Data(data))
         }
         if (last) {
@@ -78,15 +78,15 @@ class MuseStream internal constructor(
 
     @Throws(IOException::class)
     fun awaitStatus(timeoutMillis: Long): Int {
-        val item = items.poll(timeoutMillis, TimeUnit.MILLISECONDS) ?: throw SocketTimeoutException("aucune réponse")
+        val item = items.poll(timeoutMillis, TimeUnit.MILLISECONDS) ?: throw SocketTimeoutException("no response")
         return when (item) {
             is Item.Head -> item.status
             is Item.Broken -> throw IOException(item.reason)
-            else -> throw IOException("réponse sans en-tête")
+            else -> throw IOException("response without header")
         }
     }
 
-    /** Le morceau suivant, vide si rien n'est arrivé à temps, `null` à la fin du corps. */
+    /** The next chunk, empty if nothing arrived in time, `null` at the end of the body. */
     @Throws(IOException::class)
     fun read(timeoutMillis: Long): ByteArray? =
         when (val item = items.poll(timeoutMillis, TimeUnit.MILLISECONDS)) {
@@ -94,7 +94,7 @@ class MuseStream internal constructor(
             is Item.Data -> item.bytes.also { buffered.addAndGet(-it.size) }
             Item.End -> null.also { items.add(Item.End) }
             is Item.Broken -> throw IOException(item.reason)
-            is Item.Head -> throw IOException("second en-tête")
+            is Item.Head -> throw IOException("second header")
         }
 
     fun close() = cancel(this)

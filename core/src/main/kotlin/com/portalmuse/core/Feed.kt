@@ -6,27 +6,24 @@ import org.json.JSONObject
 private const val MAX_ITEMS = 12
 private const val DEADLINE_S = 150L
 
-/** Une proposition du fil de Muse. Toucher [actionLabel] envoie [actionMessage] à Muse. */
+/** A suggestion of Muse's feed. Touching [actionLabel] sends [actionMessage] to Muse. */
 data class FeedItem(
     val title: String,
     val text: String?,
     val icon: String?,
     val actionLabel: String,
     val actionMessage: String,
-    /** Une image prête à enregistrer, dans la forme que rend [FeedHost.loadPhoto]. */
+    /** A picture ready to save, in the form returned by [FeedHost.loadPhoto]. */
     val image: Any? = null,
 )
 
 interface FeedHost {
     fun loadPhoto(source: PictureSource): Any?
-    /** Remplace le fil ; [open] demande à l'afficher. Renvoie si c'est affiché. */
+    /** Replaces the feed; [open] asks to show it. Returns whether it is shown. */
     fun setFeed(items: List<FeedItem>, open: Boolean): Boolean
 }
 
-/**
- * Le « Fil » de Muse sur le Portal. Aucun accès à ce fil n'existe pour un gadget : c'est Muse
- * qui le dépose ici.
- */
+/** Muse's "Feed" on the Portal. A gadget has no access to that feed: Muse is the one that puts it here. */
 class FeedCommands(private val host: FeedHost) : CommandSet {
     override fun specs(): Map<String, JSONObject> = linkedMapOf(
         SET to Specs.of(
@@ -58,8 +55,8 @@ class FeedCommands(private val host: FeedHost) : CommandSet {
             sources.add(url?.let { PictureSource.Web(it) } ?: path?.let { PictureSource.File(it) })
             FeedItem(
                 title, Specs.text(item, "text", 600), Specs.text(item, "icon", 8),
-                Specs.text(item, "action_label", 24) ?: "C'est parti",
-                Specs.text(item, "action_message", 500) ?: "C'est parti pour : $title",
+                Specs.text(item, "action_label", 24) ?: tr("Let's go", "C'est parti"),
+                Specs.text(item, "action_message", 500) ?: tr("Let's go: $title", "C'est parti pour : $title"),
             )
         }
         val wanted = sources.filterNotNull()
@@ -69,7 +66,7 @@ class FeedCommands(private val host: FeedHost) : CommandSet {
             if (sources[index] == null) item else item.copy(image = loaded[next++])
         }
         val shown = host.setFeed(complete, params.opt("open") == true && complete.isNotEmpty())
-        // Une image manquante ne fait pas échouer le fil : on dit laquelle.
+        // A missing picture does not fail the feed: we say which one.
         val failed = complete.indices.filter { sources[it] != null && complete[it].image == null }.map { it + 1 }
         return Specs.ok(
             JSONObject().put("items", complete.size).put("shown", shown).put("failed_images", JSONArray(failed)),

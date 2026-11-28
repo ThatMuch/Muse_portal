@@ -5,17 +5,17 @@ import org.json.JSONObject
 
 private const val MAX_APP_CHARS = 200_000
 
-/** Un minuteur en cours. */
+/** A running timer. */
 data class TimerInfo(val id: Int, val label: String?, val remainingSeconds: Long)
 
-/** Les minuteurs et le volume de l'appareil. */
+/** The device's timers and volume. */
 interface HomeHost {
-    /** `null` s'il y en a déjà trop. */
+    /** `null` if there are already too many. */
     fun startTimer(durationMillis: Long, label: String?): TimerInfo?
     fun timers(): List<TimerInfo>
-    /** [id] nul : tous. Renvoie le nombre retiré. */
+    /** [id] null: all of them. Returns the number removed. */
     fun cancelTimers(id: Int?): Int
-    /** Le volume des médias, en pour cent. */
+    /** Media volume, in percent. */
     fun volume(): Int
     fun setVolume(percent: Int): Int
 }
@@ -81,19 +81,19 @@ class HomeCommands(private val host: HomeHost) : CommandSet {
     }
 }
 
-/** Une petite application gardée sur l'appareil. */
+/** A small app kept on the device. */
 data class AppInfo(val name: String, val title: String)
 
 interface AppHost {
     fun isAvailable(): Boolean
-    /** Faux s'il n'y a plus de place. */
+    /** False if there is no room left. */
     fun save(app: AppInfo, html: String): Boolean
     fun list(): List<AppInfo>
     fun open(name: String): Boolean
     fun remove(name: String): Boolean
 }
 
-/** Les petites applications tactiles que Muse écrit pour son propriétaire. */
+/** The small touch apps that Muse writes for its owner. */
 class AppCommands(private val host: AppHost) : CommandSet {
     override fun specs(): Map<String, JSONObject> {
         val named = { JSONObject().put("name", Specs.field("string", "1-32 of a-z, 0-9 and hyphen.")) }
@@ -153,8 +153,8 @@ class AppCommands(private val host: AppHost) : CommandSet {
 }
 
 /**
- * Le cadre d'une application écrite à distance : script en ligne seulement, aucun accès au
- * réseau. WebRTC, que la politique de contenu ne couvre pas, est retiré avant tout.
+ * The frame of an app written remotely: inline script only, no network access. WebRTC, which the content policy
+ * does not cover, is removed first.
  */
 object AppPage {
     private const val HEAD = "<!doctype html><meta charset=\"utf-8\">" +

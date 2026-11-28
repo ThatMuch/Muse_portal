@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/rtc/stun.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/rtc/stun.py
 package com.portalmuse.core.rtc
 
 import java.io.ByteArrayOutputStream
@@ -10,7 +10,7 @@ import java.util.zip.CRC32
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-/** Les vérifications de connexion et de consentement ICE (RFC 5389 et 8445). */
+/** ICE connectivity and consent checks (RFC 5389 and 8445). */
 object Stun {
     private const val MAGIC = 0x2112A442
     private const val BINDING_REQUEST = 0x0001
@@ -40,7 +40,7 @@ object Stun {
         doFinal(data)
     }
 
-    /** Une vérification en rôle « contrôlant » ; [nominate] désigne le chemin retenu. */
+    /** A check in the "controlling" role; [nominate] marks the chosen path. */
     fun bindingRequest(
         username: String, password: String, priority: Int, tieBreaker: Long, nominate: Boolean,
         transaction: ByteArray = ByteArray(12).also(random::nextBytes),
@@ -60,7 +60,7 @@ object Stun {
         )
     }
 
-    /** Vrai pour une réponse de succès authentifiée à [transaction]. */
+    /** True for a success response authenticated for [transaction]. */
     fun isSuccess(data: ByteArray, transaction: ByteArray, password: String): Boolean {
         if (!isStun(data) || !data.copyOfRange(8, 20).contentEquals(transaction)) return false
         val buffer = ByteBuffer.wrap(data)

@@ -1,10 +1,10 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/ble_framing.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/ble_framing.py
 package com.portalmuse.core
 
 import java.io.ByteArrayOutputStream
 
-/** Trames BLE : `0xFE`, index, total, fragment. Sans `0xFE`, le paquet est un message complet. */
+/** BLE frames: `0xFE`, index, total, fragment. Without `0xFE`, the packet is a complete message. */
 object BleFraming {
     const val CHUNK_MAGIC: Byte = 0xFE.toByte()
     const val HEADER_BYTES = 3
@@ -14,12 +14,12 @@ object BleFraming {
     const val DEFAULT_ATT_MTU = 23
     const val CHUNK_STAGGER_MS = 50L
 
-    /** Découpe [data] en paquets qui tiennent chacun dans une notification au [mtu] donné. */
+    /** Splits [data] into packets that each fit in one notification at the given [mtu]. */
     fun encodeChunks(data: ByteArray, mtu: Int = DEFAULT_ATT_MTU): List<ByteArray> {
         val notifyMax = minOf(if (mtu > 3) mtu - 3 else 20, MAX_PACKET_BYTES)
         val usable = notifyMax - HEADER_BYTES
         val total = maxOf(1, (data.size + usable - 1) / usable)
-        require(total <= MAX_CHUNKS) { "le message demande $total fragments (max $MAX_CHUNKS)" }
+        require(total <= MAX_CHUNKS) { "the message needs $total fragments (max $MAX_CHUNKS)" }
         return List(total) { index ->
             val start = index * usable
             byteArrayOf(CHUNK_MAGIC, index.toByte(), total.toByte()) +
@@ -28,7 +28,7 @@ object BleFraming {
     }
 }
 
-/** Réassemble les écritures fragmentées, strictement dans l'ordre. */
+/** Reassembles fragmented writes, strictly in order. */
 class ChunkAssembler(private val maxBytes: Int = BleFraming.MAX_MESSAGE_BYTES) {
     private val buffer = ByteArrayOutputStream()
     private var total = 0
@@ -41,7 +41,7 @@ class ChunkAssembler(private val maxBytes: Int = BleFraming.MAX_MESSAGE_BYTES) {
         next = 0
     }
 
-    /** Ajoute une écriture ; renvoie le message dès qu'il est complet. */
+    /** Adds a write; returns the message as soon as it is complete. */
     @Synchronized
     fun feed(packet: ByteArray): ByteArray? {
         if (packet.size < BleFraming.HEADER_BYTES || packet[0] != BleFraming.CHUNK_MAGIC) return packet.copyOf()

@@ -1,4 +1,4 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
 package com.portalmuse.core
 
 import org.bouncycastle.crypto.digests.SHA256Digest
@@ -22,7 +22,7 @@ import javax.crypto.KeyAgreement
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/** Primitives partagées : celles de la plateforme (JCA), HKDF de BouncyCastle. */
+/** Shared primitives: the platform's (JCA), HKDF from BouncyCastle. */
 internal object Primitives {
     fun sha256(vararg parts: ByteArray): ByteArray {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -30,11 +30,11 @@ internal object Primitives {
         return digest.digest()
     }
 
-    /** HKDF-SHA256 (RFC 5869), extraction puis expansion. */
+    /** HKDF-SHA256 (RFC 5869), extract then expand. */
     fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray =
         generate(HKDFParameters(ikm, salt, info), length)
 
-    /** Expansion seule, à partir d'une clé pseudo-aléatoire. */
+    /** Expand only, from a pseudorandom key. */
     fun hkdfExpand(prk: ByteArray, info: ByteArray, length: Int): ByteArray =
         generate(HKDFParameters.skipExtractParameters(prk, info), length)
 
@@ -44,7 +44,7 @@ internal object Primitives {
         return ByteArray(length).also { generator.generateBytes(it, 0, length) }
     }
 
-    /** AES-256-GCM, tag de 16 octets ajouté à la fin du chiffré. */
+    /** AES-256-GCM, 16 byte tag appended to the ciphertext. */
     fun aesGcm(encrypt: Boolean, key: ByteArray, nonce: ByteArray, aad: ByteArray, input: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         val mode = if (encrypt) Cipher.ENCRYPT_MODE else Cipher.DECRYPT_MODE
@@ -54,7 +54,7 @@ internal object Primitives {
     }
 }
 
-/** Paire P-256 ; [publicPoint] est le point non compressé de 65 octets. */
+/** P-256 key pair; [publicPoint] is the 65 byte uncompressed point. */
 class P256KeyPair(val privateKey: PrivateKey, val publicPoint: ByteArray)
 
 object P256 {
@@ -74,25 +74,25 @@ object P256 {
         return P256KeyPair(pair.private, byteArrayOf(4) + fixed(point.affineX) + fixed(point.affineY))
     }
 
-    /** Pour les tests sur vecteurs. */
+    /** For the test vectors. */
     fun privateKeyFromScalar(scalar: BigInteger): PrivateKey =
         KeyFactory.getInstance("EC").generatePrivate(ECPrivateKeySpec(scalar, parameters))
 
-    /** Décode un point du téléphone et refuse tout point hors de la courbe. */
+    /** Decodes a point from the phone and rejects any point off the curve. */
     fun decodePoint(bytes: ByteArray): ECPublicKey {
-        require(bytes.size == POINT_BYTES && bytes[0] == 4.toByte()) { "point P-256 invalide" }
+        require(bytes.size == POINT_BYTES && bytes[0] == 4.toByte()) { "invalid P-256 point" }
         val x = BigInteger(1, bytes.copyOfRange(1, 33))
         val y = BigInteger(1, bytes.copyOfRange(33, POINT_BYTES))
         val curve = parameters.curve
         val p = (curve.field as ECFieldFp).p
-        require(x < p && y < p) { "coordonnée hors du corps" }
+        require(x < p && y < p) { "coordinate outside the field" }
         val right = x.multiply(x).add(curve.a).multiply(x).add(curve.b).mod(p)
-        require(y.multiply(y).mod(p) == right) { "point hors de la courbe" }
+        require(y.multiply(y).mod(p) == right) { "point off the curve" }
         val spec = ECPublicKeySpec(ECPoint(x, y), parameters)
         return KeyFactory.getInstance("EC").generatePublic(spec) as ECPublicKey
     }
 
-    /** Secret partagé : la coordonnée x, 32 octets. */
+    /** Shared secret: the x coordinate, 32 bytes. */
     fun ecdh(privateKey: PrivateKey, peerPoint: ByteArray): ByteArray {
         val agreement = KeyAgreement.getInstance("ECDH")
         agreement.init(privateKey)

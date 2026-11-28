@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/voice_call.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/voice_call.py
 package com.portalmuse.core
 
 import org.json.JSONException
@@ -29,15 +29,15 @@ private const val DRAIN_MS = 5_200L
 private const val TICK_MS = 50L
 private const val AUDIBLE_RMS = 300.0
 
-/** Le micro et le haut-parleur de l'appel : PCM 16 bits mono à 24 kHz. */
+/** The call's microphone and speaker: 16 bit mono PCM at 24 kHz. */
 interface CallAudio {
-    /** Le morceau suivant du micro (1920 octets au plus) ; `null` une fois la capture arrêtée. */
+    /** The next microphone chunk (at most 1920 bytes); `null` once capture has stopped. */
     fun read(): ByteArray?
 
-    /** Peut bloquer le temps que le haut-parleur accepte le son. */
+    /** May block while the speaker accepts the sound. */
     fun play(pcm: ByteArray)
 
-    /** Jette le son pas encore entendu. */
+    /** Drops the sound not heard yet. */
     fun flush()
 
     fun stopCapture()
@@ -46,15 +46,15 @@ interface CallAudio {
 sealed class CallEvent {
     object Connected : CallEvent()
     data class Speaking(val speaking: Boolean) : CallEvent()
-    /** Ce que dit Muse : un ajout, ou le texte entier quand [final]. */
+    /** What Muse says: an addition, or the whole text when [final]. */
     data class Words(val text: String, val final: Boolean) : CallEvent()
-    /** Ce que Muse a entendu pour un tour de parole : un ajout, ou le texte entier quand [final]. */
+    /** What Muse heard for a speech turn: an addition, or the whole text when [final]. */
     data class Heard(val item: String, val text: String, val final: Boolean) : CallEvent()
-    /** Muse a jugé que ce tour de parole ne lui était pas adressé : il n'y répondra pas. */
+    /** Muse judged that this speech turn was not addressed to it: it will not answer. */
     data class Ignored(val item: String) : CallEvent()
 }
 
-/** [NOTHING_ASKED] : aucune demande entendue après un appel ouvert par le mot d'activation. */
+/** [NOTHING_ASKED]: no request heard after a call opened by the wake word. */
 enum class CallEnd { REMOTE_END, REMOTE_STOP, HUNG_UP, IDLE, TOO_LONG, NOTHING_ASKED, GOODBYE }
 
 enum class CallFailure { REFUSED, NOT_READY, PROTOCOL, CONNECTION }
@@ -67,8 +67,8 @@ sealed class CallResult {
 private class CallProblem(val failure: CallFailure, message: String, val status: Int? = null) : Exception(message)
 
 /**
- * Un appel vocal en temps réel, sur une connexion réservée à la voix. Semi-duplex : le micro est
- * coupé pendant que Muse parle ; [interrupt] lui coupe la parole. Un appel ne sert qu'une fois.
+ * A real-time voice call, on a connection reserved for voice. Half duplex: the microphone is muted while Muse
+ * speaks; [interrupt] cuts it off. A call is used only once.
  */
 class VoiceCall(
     private val link: LinkSession,
@@ -78,11 +78,11 @@ class VoiceCall(
     private val overallTimeoutMillis: Long = 300_000,
     private val readyTimeoutMillis: Long = 35_000,
     private val cleanupTimeoutMillis: Long = 10_000,
-    /** Un tour jamais clos par le serveur ne retient pas l'appel au-delà de ce silence. */
+    /** A turn never closed by the server does not hold the call beyond this silence. */
     private val stalledTurnTimeoutMillis: Long = 90_000,
     /**
-     * Pour un appel ouvert par le mot d'activation : le clore si Muse n'a reconnu aucune demande
-     * dans ce délai. Une fausse alerte devant la télévision ne doit pas laisser le micro ouvert.
+     * For a call opened by the wake word: close it if Muse has recognized no request within this time. A false
+     * alarm in front of the television must not leave the microphone open.
      */
     private val firstTurnTimeoutMillis: Long? = null,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
@@ -96,7 +96,7 @@ class VoiceCall(
 
     private class Chunk(val pcm: ByteArray, val audible: Boolean)
 
-    /** Protège l'état partagé. Aucun envoi réseau ne se fait sous ce verrou. */
+    /** Protects the shared state. No network send happens under this lock. */
     private val lock = Object()
     private val callId = UUID.randomUUID().toString()
     private val gate = ReplyGate()
@@ -118,10 +118,10 @@ class VoiceCall(
     private var admissionSent = false
     private var advisoryErrors = 0
     private var readyAt = 0L
-    /** Début de la prise de parole en cours, tant que le serveur ne l'a ni close ni écartée. */
+    /** Start of the ongoing speech, as long as the server has neither closed nor dropped it. */
     private var speakingSince: Long? = null
     private var turnHeard = false
-    /** Compteurs de diagnostic : des types et des quantités, jamais de contenu. */
+    /** Diagnostic counters: types and quantities, never content. */
     private val receivedTypes = LinkedHashMap<String, Int>()
     private var sentFrames = 0
     private var audibleFrames = 0
@@ -135,12 +135,12 @@ class VoiceCall(
     @Volatile private var hungUp = false
     @Volatile private var workerFailure: CallProblem? = null
 
-    /** Raccroche. */
+    /** Hangs up. */
     fun hangUp() {
         hungUp = true
     }
 
-    /** Coupe la parole à Muse ; le son restant de cette réponse sera ignoré. */
+    /** Cuts Muse off; the rest of that reply's sound will be ignored. */
     fun interrupt() {
         if (!ready || ended) return
         val response = synchronized(lock) {
@@ -153,7 +153,7 @@ class VoiceCall(
             try {
                 send(JSONObject().put("type", "response.cancel").put("response_id", response))
             } catch (e: IOException) {
-                log("annulation de la réponse non envoyée")
+                log("reply cancellation not sent")
             }
         }
     }
@@ -165,13 +165,13 @@ class VoiceCall(
         return try {
             CallResult.Ended(converse(started))
         } catch (e: CallProblem) {
-            log("appel interrompu : ${e.message}")
+            log("call interrupted: ${e.message}")
             CallResult.Failed(e.failure, e.status)
         } catch (e: IOException) {
-            log("appel interrompu : ${e.javaClass.simpleName}")
+            log("call interrupted: ${e.javaClass.simpleName}")
             CallResult.Failed(CallFailure.CONNECTION, null)
         } catch (e: IllegalStateException) {
-            log("appel interrompu : limite dépassée")
+            log("call interrupted: limit exceeded")
             CallResult.Failed(CallFailure.PROTOCOL, null)
         } catch (e: NoiseError) {
             CallResult.Failed(CallFailure.CONNECTION, null)
@@ -192,31 +192,31 @@ class VoiceCall(
             listOf("Content-Type" to "application/x-ndjson; charset=utf-8"), ByteArray(0),
             endBody = false, maxBufferedBytes = MAX_STREAM_BYTES,
         )
-        // Même un envoi incertain peut avoir ouvert l'appel : il faudra le clore.
+        // Even an uncertain send may have opened the call: it will have to be closed.
         admissionSent = true
         send(
             JSONObject().put("type", "hatch.voice.call.start").put("call_id", callId)
                 .put("device", "mcu-wearable").put("device_id", deviceId)
                 .put("call_media_type", "audio").put("proactive_greeting_enabled", false),
         )
-        // Cet appareil sait raccrocher à la demande de Muse, par exemple après un au revoir.
+        // This device can hang up at Muse's request, for example after a goodbye.
         send(JSONObject().put("type", "hatch.voice.capability.offer").put("end_call_stop", 1))
         val status = awaitStatus(started) ?: return CallEnd.HUNG_UP
-        if (status !in 200..299) throw CallProblem(CallFailure.REFUSED, "refusé : HTTP $status", status)
+        if (status !in 200..299) throw CallProblem(CallFailure.REFUSED, "refused: HTTP $status", status)
         workers = listOf(thread(name = "call-speaker") { playLoop() })
         val line = ByteArrayOutputStream()
         while (true) {
             due(started)?.let { return it }
             val chunk = stream.read(TICK_MS)
             if (chunk == null) {
-                if (!ready) throw CallProblem(CallFailure.CONNECTION, "fin avant le début de l'appel")
+                if (!ready) throw CallProblem(CallFailure.CONNECTION, "ended before the call started")
                 drain()
                 return CallEnd.REMOTE_END
             }
             for (byte in chunk) {
                 if (byte != '\n'.code.toByte()) {
                     line.write(byte.toInt())
-                    if (line.size() > MAX_LINE_BYTES) throw CallProblem(CallFailure.PROTOCOL, "ligne trop longue")
+                    if (line.size() > MAX_LINE_BYTES) throw CallProblem(CallFailure.PROTOCOL, "line too long")
                     continue
                 }
                 val text = line.toString("UTF-8")
@@ -225,7 +225,7 @@ class VoiceCall(
                 val event = try {
                     JSONObject(text)
                 } catch (e: JSONException) {
-                    throw CallProblem(CallFailure.PROTOCOL, "événement illisible")
+                    throw CallProblem(CallFailure.PROTOCOL, "unreadable event")
                 }
                 handle(event)?.let { return it }
             }
@@ -233,7 +233,7 @@ class VoiceCall(
         }
     }
 
-    /** `null` si l'utilisateur raccroche avant la réponse. */
+    /** `null` if the user hangs up before the answer. */
     private fun awaitStatus(started: Long): Int? {
         while (true) {
             if (due(started) == CallEnd.HUNG_UP) return null
@@ -245,21 +245,21 @@ class VoiceCall(
         }
     }
 
-    /** La fin imposée par l'utilisateur ou les délais, s'il y en a une. */
+    /** The end imposed by the user or the timeouts, if any. */
     private fun due(started: Long): CallEnd? {
         workerFailure?.let { throw it }
         val now = clock()
         if (hungUp) return CallEnd.HUNG_UP
         if (now - started >= overallTimeoutMillis) return CallEnd.TOO_LONG
         if (!ready && now - started >= minOf(readyTimeoutMillis, overallTimeoutMillis)) {
-            throw CallProblem(CallFailure.NOT_READY, "l'appel n'a pas démarré à temps")
+            throw CallProblem(CallFailure.NOT_READY, "the call did not start in time")
         }
         val limit = firstTurnTimeoutMillis
         if (limit != null && ready && synchronized(lock) { !turnHeard && now - readyAt >= limit }) {
             return CallEnd.NOTHING_ASKED
         }
-        // Seuls les échanges comptent : contrairement au client Linux, le bruit capté par le micro
-        // (télévision, conversations) ne prolonge pas l'appel.
+        // Only exchanges count: unlike the Linux client, noise picked up by the microphone (television,
+        // conversations) does not extend the call.
         val idle = synchronized(lock) {
             val quiet = now - activity
             val talking = speakingSince?.let { now - it < idleTimeoutMillis } == true
@@ -269,7 +269,7 @@ class VoiceCall(
     }
 
     private fun handle(event: JSONObject): CallEnd? {
-        val kind = event.opt("type") as? String ?: throw CallProblem(CallFailure.PROTOCOL, "événement sans type")
+        val kind = event.opt("type") as? String ?: throw CallProblem(CallFailure.PROTOCOL, "event without a type")
         count(kind)
         when (kind) {
             "error" -> {
@@ -278,7 +278,7 @@ class VoiceCall(
             }
             "hatch.voice.session" -> confirm(event)
             "hatch.voice.switch_input_hold" -> {
-                val value = event.opt("held") as? Boolean ?: throw CallProblem(CallFailure.PROTOCOL, "attente invalide")
+                val value = event.opt("held") as? Boolean ?: throw CallProblem(CallFailure.PROTOCOL, "invalid wait")
                 synchronized(lock) {
                     if (held != value) micEpoch++
                     held = value
@@ -292,13 +292,13 @@ class VoiceCall(
                 if (item?.opt("type") == "session_control" && !control.isNullOrEmpty() && control.length <= 128 &&
                     item.optString("name").trim().equals("stop", ignoreCase = true)
                 ) {
-                    if (!ready) throw CallProblem(CallFailure.PROTOCOL, "arrêt reçu avant le début")
+                    if (!ready) throw CallProblem(CallFailure.PROTOCOL, "stop received before the start")
                     drain()
                     return CallEnd.REMOTE_STOP
                 }
             }
             "hatch.voice.turn_started", "hatch.voice.turn_settled" -> if (!trackTurn(event)) return null
-            // La fin d'une réponse n'est pas la fin de l'appel.
+            // The end of a reply is not the end of the call.
             "response.created", "response.done", "response.completed" -> touch()
             "response.output_audio_transcript.delta" ->
                 (event.opt("delta") as? String)?.takeIf { it.isNotEmpty() }?.let { words(CallEvent.Words(it, false)) }
@@ -308,7 +308,7 @@ class VoiceCall(
             "conversation.item.input_audio_transcription.completed" -> heard(event, "transcript", final = true)
             "hatch.voice.input_suppressed" -> {
                 synchronized(lock) { speakingSince = null }
-                log("parole écartée par Muse (${describeFields(event)})")
+                log("speech dropped by Muse (${describeFields(event)})")
                 identifier(event.opt("item_id"))?.let { onEvent(CallEvent.Ignored(it)) }
             }
         }
@@ -329,7 +329,7 @@ class VoiceCall(
         onEvent(CallEvent.Heard(item, text, final))
     }
 
-    /** Les noms des champs, et la valeur des seuls codes de motif. Jamais de texte libre. */
+    /** Field names, and the value of reason codes only. Never free text. */
     private fun describeFields(event: JSONObject): String {
         val token = Regex("[A-Za-z0-9_.-]{1,40}")
         return event.keys().asSequence().filter { it != "type" && it != "event_id" && it != "item_id" }
@@ -340,7 +340,7 @@ class VoiceCall(
                     value is String && token.matches(value)
                 if (shown) "$key=$value" else key
             }
-            .joinToString(", ").ifEmpty { "sans motif" }
+            .joinToString(", ").ifEmpty { "no reason" }
     }
 
     private fun count(kind: String) = synchronized(lock) {
@@ -350,16 +350,16 @@ class VoiceCall(
 
     private fun summary(): String = synchronized(lock) {
         val received = receivedTypes.entries.joinToString(", ") { "${it.key} x${it.value}" }.ifEmpty { "rien" }
-        "bilan : micro $sentFrames morceaux envoyés (dont $audibleFrames avec du son), $mutedFrames écartés ; " +
-            "son de Muse ${museAudioBytes * 10 / BYTES_PER_SECOND / 10.0} s ; reçu : $received"
+        "summary: microphone $sentFrames chunks sent ($audibleFrames with sound), $mutedFrames dropped; " +
+            "Muse sound ${museAudioBytes * 10 / BYTES_PER_SECOND / 10.0} s; received: $received"
     }
 
     private fun touch() = synchronized(lock) { activity = clock() }
 
     private fun confirm(event: JSONObject) {
-        if (ready || event.opt("call_id") != callId) throw CallProblem(CallFailure.PROTOCOL, "identité d'appel incohérente")
+        if (ready || event.opt("call_id") != callId) throw CallProblem(CallFailure.PROTOCOL, "inconsistent call identity")
         if ((event.opt("session_id") as? String).isNullOrBlank()) {
-            throw CallProblem(CallFailure.PROTOCOL, "session absente")
+            throw CallProblem(CallFailure.PROTOCOL, "session missing")
         }
         threadId = (event.opt("thread_id") as? String)?.takeIf { it.isNotBlank() }
         touch()
@@ -370,26 +370,26 @@ class VoiceCall(
     }
 
     private fun serverError(event: JSONObject) {
-        val error = event.optJSONObject("error") ?: throw CallProblem(CallFailure.PROTOCOL, "erreur illisible")
+        val error = event.optJSONObject("error") ?: throw CallProblem(CallFailure.PROTOCOL, "unreadable error")
         if (!ready || error.opt("code") == "session_dead") {
-            throw CallProblem(CallFailure.CONNECTION, "session vocale en échec")
+            throw CallProblem(CallFailure.CONNECTION, "voice session failed")
         }
-        // L'échec d'un tour ne termine pas l'appel. Le message du serveur n'est jamais journalisé.
-        if (advisoryErrors++ == 0) log("une opération vocale a échoué ; l'appel continue")
+        // The failure of a turn does not end the call. The server's message is never logged.
+        if (advisoryErrors++ == 0) log("a voice operation failed; the call goes on")
     }
 
-    /** Les tours en cours retiennent le délai d'inactivité. Faux : événement à ignorer. */
+    /** Ongoing turns hold the idle timeout. False: event to ignore. */
     private fun trackTurn(event: JSONObject): Boolean = synchronized(lock) {
         if (event.opt("type") == "hatch.voice.turn_started") {
             val message = identifier(event.opt("submission_message_id"))
             val item = identifier(event.opt("item_id"))
-            if (message == null || item == null) throw CallProblem(CallFailure.PROTOCOL, "tour invalide")
+            if (message == null || item == null) throw CallProblem(CallFailure.PROTOCOL, "invalid turn")
             val previous = activeTurns[message] ?: settledTurns[message]
             if (previous != null) {
-                if (previous != item) throw CallProblem(CallFailure.PROTOCOL, "tour contradictoire")
+                if (previous != item) throw CallProblem(CallFailure.PROTOCOL, "contradictory turn")
                 return true
             }
-            check(activeTurns.size < MAX_TRACKED_TURNS) { "trop de tours en cours" }
+            check(activeTurns.size < MAX_TRACKED_TURNS) { "too many turns in progress" }
             activeTurns[message] = item
             turnHeard = true
             activity = clock()
@@ -397,13 +397,13 @@ class VoiceCall(
         }
         val message = identifier(event.opt("response_message_id")) ?: return false
         val item = activeTurns[message] ?: return false
-        // Une réponse tardive a son propre identifiant mais désigne le même tour de l'appelant.
+        // A late reply has its own identifier but names the same caller turn.
         val completed = ArrayList<String>()
         for ((key, value) in activeTurns) {
             if (value == item) completed.add(key)
             if (key == message) break
         }
-        check(settledTurns.size + completed.size <= MAX_SETTLED_TURNS) { "trop de tours terminés" }
+        check(settledTurns.size + completed.size <= MAX_SETTLED_TURNS) { "too many finished turns" }
         for (key in completed) settledTurns[key] = activeTurns.remove(key)!!
         activity = clock()
         true
@@ -414,7 +414,7 @@ class VoiceCall(
             val verdict = gate.words()
             if (verdict == ReplyGate.Verdict.HOLD) {
                 val size = waiting.filterIsInstance<Held.Words>().sumOf { it.event.text.length }
-                check(waiting.size < MAX_HELD_ITEMS && size + event.text.length <= MAX_HELD_TEXT_CHARS) { "texte en attente" }
+                check(waiting.size < MAX_HELD_ITEMS && size + event.text.length <= MAX_HELD_TEXT_CHARS) { "pending text" }
                 waiting.add(Held.Words(event, gate.wordsIds))
             }
             verdict
@@ -423,7 +423,7 @@ class VoiceCall(
     }
 
     private fun received(event: JSONObject, pcm: ByteArray) {
-        // Les silences de maintien peuvent précéder le début : ni son, ni délai prolongé.
+        // Keepalive silences may precede the start: neither sound nor an extended timeout.
         val silent = pcm.all { it == 0.toByte() }
         val keepalive = synchronized(lock) { silent && !receivedAudio && waiting.none { it is Held.Audio } }
         if (keepalive) {
@@ -431,7 +431,7 @@ class VoiceCall(
             applyFlush()
             return
         }
-        if (!ready) throw CallProblem(CallFailure.PROTOCOL, "son reçu avant le début de l'appel")
+        if (!ready) throw CallProblem(CallFailure.PROTOCOL, "sound received before the call started")
         val verdict = synchronized(lock) { gate.audio(event) }
         applyFlush()
         synchronized(lock) {
@@ -439,7 +439,7 @@ class VoiceCall(
                 queue(pcm)
             } else if (verdict == ReplyGate.Verdict.HOLD) {
                 val size = waiting.filterIsInstance<Held.Audio>().sumOf { it.pcm.size() }
-                check(size + pcm.size <= MAX_PLAYBACK_BYTES) { "son en attente" }
+                check(size + pcm.size <= MAX_PLAYBACK_BYTES) { "pending sound" }
                 val last = waiting.lastOrNull() as? Held.Audio
                     ?: Held.Audio(ByteArrayOutputStream()).also { waiting.add(it) }
                 last.pcm.write(pcm)
@@ -463,11 +463,11 @@ class VoiceCall(
         words.forEach(onEvent)
     }
 
-    /** Sous le verrou. */
+    /** Under the lock. */
     private fun queue(pcm: ByteArray) {
         receivedAudio = true
         if (rms(pcm) >= AUDIBLE_RMS) museAudioBytes += pcm.size
-        check(playbackBytes + pcm.size <= MAX_PLAYBACK_BYTES) { "haut-parleur en retard" }
+        check(playbackBytes + pcm.size <= MAX_PLAYBACK_BYTES) { "speaker lagging" }
         for (offset in pcm.indices step FRAME_BYTES) {
             val part = pcm.copyOfRange(offset, minOf(offset + FRAME_BYTES, pcm.size))
             val audible = rms(part) >= AUDIBLE_RMS
@@ -525,7 +525,7 @@ class VoiceCall(
             try {
                 audio.play(chunk.pcm)
             } catch (e: RuntimeException) {
-                workerFailure = CallProblem(CallFailure.CONNECTION, "haut-parleur en échec")
+                workerFailure = CallProblem(CallFailure.CONNECTION, "speaker failed")
                 return
             }
             synchronized(lock) {
@@ -556,9 +556,9 @@ class VoiceCall(
             while (!ended) {
                 val pcm = audio.read() ?: return
                 if (pcm.isEmpty() || pcm.size > FRAME_BYTES || pcm.size % 2 != 0) {
-                    throw CallProblem(CallFailure.PROTOCOL, "morceau de micro invalide")
+                    throw CallProblem(CallFailure.PROTOCOL, "invalid microphone chunk")
                 }
-                // Le son capté pendant la coupure est jeté, jamais rejoué plus tard.
+                // Sound captured while muted is dropped, never replayed later.
                 if (micGated()) {
                     synchronized(lock) { mutedFrames++ }
                     continue
@@ -582,27 +582,27 @@ class VoiceCall(
         } catch (e: CallProblem) {
             workerFailure = e
         } catch (e: IOException) {
-            if (!ended) workerFailure = CallProblem(CallFailure.CONNECTION, "envoi du son impossible")
+            if (!ended) workerFailure = CallProblem(CallFailure.CONNECTION, "cannot send sound")
         } catch (e: RuntimeException) {
-            if (!ended) workerFailure = CallProblem(CallFailure.CONNECTION, "micro en échec")
+            if (!ended) workerFailure = CallProblem(CallFailure.CONNECTION, "microphone failed")
         }
     }
 
     private fun send(event: JSONObject, admissible: () -> Boolean = { true }): Boolean =
         link.sendBody(stream, ServiceType.DAEMON, (event.toString() + "\n").toByteArray(), false, admissible)
 
-    /** Laisse finir la dernière phrase, sans qu'un haut-parleur bloqué retarde le raccroché. */
+    /** Lets the last sentence finish, without a stuck speaker delaying the hang-up. */
     private fun drain() {
         val deadline = clock() + DRAIN_MS
         while (!hungUp && clock() < deadline &&
-            // Les octets ne sont décomptés qu'une fois le morceau remis au haut-parleur.
+            // Bytes are only counted once the chunk is handed to the speaker.
             synchronized(lock) { playbackBytes > 0 || clock() < playbackEnd }
         ) {
             Thread.sleep(TICK_MS)
         }
     }
 
-    /** Clôt explicitement l'appel côté serveur, puis ferme le flux. */
+    /** Explicitly closes the call on the server side, then closes the stream. */
     private fun cleanUp(startedAt: OffsetDateTime) {
         try {
             val format = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx")
@@ -612,15 +612,15 @@ class VoiceCall(
                 .put("call_started_at", startedAt.format(format))
                 .put("call_ended_at", endedAt.format(format))
             threadId?.let { body.put("thread_id", it) }
-            if (!endCall(body)) log("fin d'appel non confirmée par le serveur")
+            if (!endCall(body)) log("end of call not confirmed by the server")
             if (::stream.isInitialized) {
                 link.sendBody(stream, ServiceType.DAEMON, ByteArray(0), true)
                 stream.close()
             }
         } catch (e: IOException) {
-            log("fin d'appel non confirmée : ${e.javaClass.simpleName}")
+            log("end of call not confirmed: ${e.javaClass.simpleName}")
         } catch (e: NoiseError) {
-            log("fin d'appel non confirmée")
+            log("end of call not confirmed")
         }
     }
 
@@ -646,7 +646,7 @@ class VoiceCall(
     }
 
     private fun audioFrom(event: JSONObject): ByteArray? {
-        fun invalid(): Nothing = throw CallProblem(CallFailure.PROTOCOL, "son reçu invalide")
+        fun invalid(): Nothing = throw CallProblem(CallFailure.PROTOCOL, "invalid sound received")
         val encoded: Any? = when (event.opt("type")) {
             "continuous_audio_video.delta" -> {
                 val delta = event.opt("audio_delta")

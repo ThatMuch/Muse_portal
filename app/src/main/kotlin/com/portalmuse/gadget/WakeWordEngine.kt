@@ -1,14 +1,14 @@
 package com.portalmuse.gadget
 
 /**
- * Le détecteur « Hey Muse » du SDK, exécuté sur le Portal. Aucun son ne quitte l'appareil.
- * Une instance ne sert qu'un fil.
+ * The SDK's "Hey Muse" detector, run on the Portal. No sound leaves the device. One instance serves a single
+ * thread.
  */
 class WakeWordEngine private constructor(private var handle: Long) : AutoCloseable {
-    /** [count] échantillons PCM 16 bits à 16 kHz ; vrai si le mot vient d'être entendu. */
+    /** [count] 16 bit PCM samples at 16 kHz; true if the word has just been heard. */
     fun feed(samples: ShortArray, count: Int): Boolean = nativeFeed(handle, samples, count)
 
-    /** Faux après un échec d'inférence. */
+    /** False after an inference failure. */
     val healthy get() = nativeOk(handle)
 
     override fun close() {
@@ -21,7 +21,7 @@ class WakeWordEngine private constructor(private var handle: Long) : AutoCloseab
     private external fun nativeDestroy(handle: Long)
 
     companion object {
-        /** [sensitivity] : un des réglages du SDK, 0 (basse), 1 (normale) ou 2 (haute). */
+        /** [sensitivity]: one of the SDK's settings, 0 (low), 1 (normal) or 2 (high). */
         fun create(sensitivity: Int): WakeWordEngine? = try {
             System.loadLibrary("muse_wakeword")
             val engine = WakeWordEngine(0)

@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Source : linux/src/musegadget/noise/noise_xx.py
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Source:
+// linux/src/musegadget/noise/noise_xx.py
 package com.portalmuse.core
 
 import org.bouncycastle.math.ec.rfc7748.X25519 as BcX25519
@@ -14,13 +14,13 @@ private const val TAG_BYTES = 16
 private const val MIN_MSG2_BYTES = DH_BYTES + (DH_BYTES + TAG_BYTES) + TAG_BYTES
 private const val MAX_NONCE = (1L shl 53) - 1
 
-/** La poignée de main ou le transport Noise a été violé. */
+/** The Noise handshake or transport was violated. */
 class NoiseError(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 class X25519KeyPair private constructor(internal val privateKey: ByteArray, val publicKey: ByteArray) {
     companion object {
         fun fromPrivate(privateKey: ByteArray): X25519KeyPair {
-            require(privateKey.size == DH_BYTES) { "clé X25519 invalide" }
+            require(privateKey.size == DH_BYTES) { "invalid X25519 key" }
             val publicKey = ByteArray(DH_BYTES)
             BcX25519.generatePublicKey(privateKey, 0, publicKey, 0)
             return X25519KeyPair(privateKey.copyOf(), publicKey)
@@ -35,25 +35,25 @@ class X25519KeyPair private constructor(internal val privateKey: ByteArray, val 
 }
 
 object X25519 {
-    /** `calculateAgreement` renvoie false pour un résultat nul : les points d'ordre faible échouent. */
+    /** `calculateAgreement` returns false for a zero result: low order points fail. */
     fun dh(own: X25519KeyPair, peer: ByteArray): ByteArray {
-        if (peer.size != DH_BYTES) throw NoiseError("x25519 : longueur de clé publique invalide")
+        if (peer.size != DH_BYTES) throw NoiseError("x25519: invalid public key length")
         val shared = ByteArray(DH_BYTES)
         if (!BcX25519.calculateAgreement(own.privateKey, 0, peer, 0, shared, 0)) {
-            throw NoiseError("x25519 : clé publique d'ordre faible refusée")
+            throw NoiseError("x25519: low order public key refused")
         }
         return shared
     }
 }
 
-/** Clé AES-GCM et nonce croissant. Tout échec l'empoisonne. */
+/** AES-GCM key and increasing nonce. Any failure poisons it. */
 class CipherState(key: ByteArray) {
     private val key = key.copyOf()
     private var nonce = 0L
     private var poisoned = false
 
     init {
-        if (key.size != 32) throw NoiseError("la clé AES-GCM doit faire 32 octets")
+        if (key.size != 32) throw NoiseError("the AES-GCM key must be 32 bytes")
     }
 
     @Synchronized
@@ -63,10 +63,10 @@ class CipherState(key: ByteArray) {
     fun decryptWithAd(ad: ByteArray, ciphertext: ByteArray): ByteArray = apply(false, ad, ciphertext)
 
     private fun apply(encrypt: Boolean, ad: ByteArray, input: ByteArray): ByteArray {
-        if (poisoned) throw NoiseError("CipherState inutilisable après un échec")
+        if (poisoned) throw NoiseError("CipherState unusable after a failure")
         if (nonce >= MAX_NONCE) {
             poisoned = true
-            throw NoiseError("nonce épuisé")
+            throw NoiseError("nonce exhausted")
         }
         val iv = ByteArray(12)
         for (i in 0 until 8) iv[4 + i] = (nonce ushr (56 - 8 * i)).toByte()
@@ -75,12 +75,12 @@ class CipherState(key: ByteArray) {
             Primitives.aesGcm(encrypt, key, iv, ad, input)
         } catch (e: GeneralSecurityException) {
             poisoned = true
-            throw NoiseError(if (encrypt) "chiffrement impossible" else "déchiffrement impossible", e)
+            throw NoiseError(if (encrypt) "encryption failed" else "decryption failed", e)
         }
     }
 }
 
-/** SymmetricState de la spécification Noise, section 5.2. */
+/** SymmetricState of the Noise specification, section 5.2. */
 internal class SymmetricState(prologue: ByteArray) {
     private var chainingKey: ByteArray = PROTOCOL_NAME.toByteArray().copyOf(32)
     private var hash: ByteArray = chainingKey.copyOf()
@@ -112,7 +112,7 @@ internal class SymmetricState(prologue: ByteArray) {
         return out
     }
 
-    /** (initiateur vers répondeur, répondeur vers initiateur). */
+    /** (initiator to responder, responder to initiator). */
     fun split(): Pair<CipherState, CipherState> {
         val (first, second) = hkdf2(chainingKey, ByteArray(0))
         return CipherState(first) to CipherState(second)
@@ -133,7 +133,7 @@ internal class SymmetricState(prologue: ByteArray) {
     }
 }
 
-/** Initiateur Noise XX. Une instance sert une seule poignée de main. */
+/** Noise XX initiator. An instance serves a single handshake. */
 class NoiseXXInitiator(
     prologue: ByteArray = ByteArray(0),
     private val generateEphemeral: () -> X25519KeyPair = X25519KeyPair::generate,
@@ -154,10 +154,10 @@ class NoiseXXInitiator(
         key.publicKey + state.encryptAndHash(payload)
     }
 
-    /** `<- e, ee, s, es` ; renvoie la charge utile du répondeur. */
+    /** `<- e, ee, s, es`; returns the responder's payload. */
     fun readMessage2(message: ByteArray): ByteArray = step(Phase.MSG1_SENT, Phase.MSG2_READ) {
-        if (message.size < MIN_MSG2_BYTES) throw NoiseError("message 2 trop court (${message.size})")
-        val own = ephemeral ?: throw NoiseError("clé éphémère absente")
+        if (message.size < MIN_MSG2_BYTES) throw NoiseError("message 2 too short (${message.size})")
+        val own = ephemeral ?: throw NoiseError("ephemeral key missing")
         val re = message.copyOfRange(0, DH_BYTES).also { remoteEphemeral = it }
         state.mixHash(re)
         state.mixKey(X25519.dh(own, re))
@@ -171,11 +171,11 @@ class NoiseXXInitiator(
     fun writeMessage3(payload: ByteArray = ByteArray(0)): ByteArray = step(Phase.MSG2_READ, Phase.MSG3_SENT) {
         val own = generateStatic()
         val encryptedStatic = state.encryptAndHash(own.publicKey)
-        state.mixKey(X25519.dh(own, remoteEphemeral ?: throw NoiseError("clé distante absente")))
+        state.mixKey(X25519.dh(own, remoteEphemeral ?: throw NoiseError("remote key missing")))
         encryptedStatic + state.encryptAndHash(payload)
     }
 
-    /** (chiffrement d'envoi, déchiffrement de réception). */
+    /** (send cipher, receive cipher). */
     fun split(): Pair<CipherState, CipherState> = step(Phase.MSG3_SENT, Phase.SPLIT) {
         ephemeral = null
         state.split()
@@ -186,7 +186,7 @@ class NoiseXXInitiator(
     fun handshakeHash(): ByteArray = state.handshakeHash()
 
     private fun <T> step(expected: Phase, next: Phase, block: () -> T): T {
-        if (phase != expected) throw NoiseError("appel hors séquence (phase $phase, attendu $expected)")
+        if (phase != expected) throw NoiseError("call out of sequence (phase $phase, expected $expected)")
         phase = Phase.DEAD
         return block().also { phase = next }
     }

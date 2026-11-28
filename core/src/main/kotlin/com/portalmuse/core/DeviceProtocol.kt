@@ -1,5 +1,5 @@
-// Portage Kotlin de muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0).
-// Sources : linux/src/musegadget/link_client.py, device_guide.py, protocols/DEVICE.md
+// Kotlin port of muse-gadget-sdk (Copyright (c) Meta Platforms, Inc. and affiliates, Apache-2.0). Sources:
+// linux/src/musegadget/link_client.py, device_guide.py, protocols/DEVICE.md
 package com.portalmuse.core
 
 import org.json.JSONException
@@ -11,7 +11,7 @@ import java.nio.ByteOrder
 private const val MAX_INBOUND_MESSAGE = 4 * 1024 * 1024
 private const val MAX_GUIDE_BYTES = 4096
 
-/** Messages du flux de contrôle : JSON précédé de sa longueur en u32 petit-boutiste. */
+/** Control stream messages: JSON preceded by its length as a little-endian u32. */
 object ControlMessages {
     fun encode(message: JSONObject): ByteArray {
         val data = message.toString().toByteArray()
@@ -19,7 +19,7 @@ object ControlMessages {
     }
 }
 
-/** Un message peut s'étaler sur plusieurs morceaux de corps : on tamponne jusqu'à complétude. */
+/** A message may span several body chunks: buffer until complete. */
 class LengthPrefixedDecoder(private val log: (String) -> Unit = {}) {
     private var buffer = ByteArray(0)
 
@@ -29,17 +29,17 @@ class LengthPrefixedDecoder(private val log: (String) -> Unit = {}) {
         var offset = 0
         while (buffer.size - offset >= 4) {
             val length = ByteBuffer.wrap(buffer, offset, 4).order(ByteOrder.LITTLE_ENDIAN).int
-            if (length < 0 || length > MAX_INBOUND_MESSAGE) throw NoiseError("message entrant trop grand")
+            if (length < 0 || length > MAX_INBOUND_MESSAGE) throw NoiseError("incoming message too large")
             if (buffer.size - offset - 4 < length) break
             val raw = String(buffer, offset + 4, length)
             offset += 4 + length
-            if (raw.isEmpty()) continue // maintien de connexion
+            if (raw.isEmpty()) continue // keepalive
             try {
                 messages.add(JSONObject(raw))
             } catch (e: JSONException) {
-                log("message de contrôle illisible ignoré ($length octets)")
+                log("unreadable control message ignored ($length bytes)")
             } catch (e: StackOverflowError) {
-                log("message de contrôle trop imbriqué ignoré")
+                log("control message nested too deeply, ignored")
             }
         }
         buffer = buffer.copyOfRange(offset, buffer.size)
@@ -47,7 +47,7 @@ class LengthPrefixedDecoder(private val log: (String) -> Unit = {}) {
     }
 }
 
-/** Ce que l'appareil déclare dans `link.register`. */
+/** What the device declares in `link.register`. */
 class DeviceDescription(
     val nodeId: String,
     private val displayName: String,
@@ -56,8 +56,8 @@ class DeviceDescription(
     private val modelName: String,
 ) {
     init {
-        require(MODEL_ID.matches(modelId)) { "model_id invalide" }
-        require(MODEL_NAME.matches(modelName)) { "model_name invalide" }
+        require(MODEL_ID.matches(modelId)) { "invalid model_id" }
+        require(MODEL_NAME.matches(modelName)) { "invalid model_name" }
     }
 
     fun registerMessage(requestId: String, commands: JSONObject): JSONObject = JSONObject()
@@ -69,7 +69,7 @@ class DeviceDescription(
             JSONObject()
                 .put("node_id", nodeId)
                 .put("display_name", displayName)
-                // Comme le client Linux, seul client à base de noyau Linux du SDK.
+                // Like the Linux client, the SDK's only Linux kernel based client.
                 .put("platform", "linux")
                 .put("version", version)
                 .put("device_family", "gadget")
@@ -86,18 +86,18 @@ class DeviceDescription(
 }
 
 /**
- * Les commandes exposées à Muse : `device.health`, `device.guide` et, si l'utilisateur l'autorise,
- * les groupes liés à l'écran. Ni shell, ni fichiers, ni caméra, ni micro.
+ * The commands exposed to Muse: `device.health`, `device.guide` and, if the user allows it, the screen related
+ * groups. No shell, files, camera or microphone.
  */
 class DeviceCommands(
     private val health: () -> JSONObject,
     private val guide: String,
     private vararg val sets: CommandSet,
-    /** La description structurée de l'appareil, jointe au guide (contrat du SDK). */
+    /** The structured description of the device, attached to the guide (SDK contract). */
     private val capabilities: JSONObject? = null,
 ) {
     init {
-        require(guide.toByteArray().size in 1..MAX_GUIDE_BYTES) { "guide vide ou trop long" }
+        require(guide.toByteArray().size in 1..MAX_GUIDE_BYTES) { "guide empty or too long" }
     }
 
     fun specs(): JSONObject {

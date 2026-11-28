@@ -5,17 +5,17 @@ import java.util.Base64
 
 sealed class PhotoResult {
     class Taken(val jpeg: ByteArray) : PhotoResult()
-    /** Refusée, ou restée sans réponse. */
+    /** Declined, or left unanswered. */
     object Declined : PhotoResult()
     class Unavailable(val reason: String) : PhotoResult()
 }
 
 interface CameraHost {
-    /** Bloque : le propriétaire voit l'image en direct et décide de la prendre puis de l'envoyer. */
+    /** Blocks: the owner sees the live picture and decides to take it and then send it. */
     fun photo(reason: String?): PhotoResult
 }
 
-/** Une photo à la demande de Muse, jamais prise ni envoyée sans deux touchers à l'écran. */
+/** A photo at Muse's request, never taken or sent without two touches on screen. */
 class CameraCommands(private val host: CameraHost) : CommandSet {
     override fun specs(): Map<String, JSONObject> = linkedMapOf(
         CAPTURE to Specs.of(

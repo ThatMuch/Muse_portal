@@ -38,43 +38,43 @@ private const val MAX_SIDE = 1600
 private const val MAX_PIXELS = 60_000_000L
 private const val JPEG_QUALITY = 88
 private const val ANSWER_GRACE_MS = 10_000L
-/** Au-delà du délai du panneau, qui repart à chaque geste. */
+/** Beyond the panel's delay, which restarts at every gesture. */
 private const val PHOTO_WAIT_MS = 190_000L
 
-/** Ce que le kiosque visible sait afficher ; appelé sur le fil principal. */
+/** What the visible kiosk can show; called on the main thread. */
 interface ScreenPresenter {
     fun showPictures(pictures: List<LoadedPicture>, title: String?, durationMillis: Long)
     fun showPage(html: String, title: String?, durationMillis: Long)
     fun closeScreen()
     fun showNotice(notice: Notice)
 
-    /** Faux si une question attend déjà. [reply] est appelé une seule fois. */
+    /** False if a question is already waiting. [reply] is called exactly once. */
     fun askQuestion(question: Question, reply: (AskResult) -> Unit): Boolean
     fun cancelQuestion()
 
     fun showFeed()
 
-    /** Faux si l'application n'existe pas. */
+    /** False if the app does not exist. */
     fun openApp(name: String): Boolean
 
-    /** Faux si une photo est déjà en cours. */
+    /** False if a photo is already in progress. */
     fun askPhoto(reason: String?, reply: (PhotoResult) -> Unit): Boolean
 
-    /** Raccourcis, mode nuit ou cadre photo ont changé. [dimNow] : la nuit vient d'être demandée. */
+    /** Shortcuts, night mode or photo frame changed. [dimNow]: night was just requested. */
     fun homeChanged(dimNow: Boolean)
 }
 
-/** Relie les commandes reçues de Muse au kiosque, quand il est à l'écran, et aux réglages. */
+/** Connects the commands received from Muse to the kiosk, when it is on screen, and to the settings. */
 class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, HomeHost, AppHost, FeedHost {
     private val context = context.applicationContext
     private val settings = Settings(this.context)
-    private val log: (String) -> Unit = { Log.i(TAG, "écran : $it") }
+    private val log: (String) -> Unit = { Log.i(TAG, "screen: $it") }
 
     override fun isAvailable() = presenter != null
 
     override fun load(source: PictureSource): Any? = bitmap(source)
 
-    /** Une photo du cadre reste compressée : trente images décodées ne tiendraient pas en mémoire. */
+    /** A frame photo stays compressed: thirty decoded pictures would not fit in memory. */
     override fun loadPhoto(source: PictureSource): Any? = bitmap(source)?.let { image ->
         val out = ByteArrayOutputStream()
         image.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
@@ -90,10 +90,10 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
                 if (AvatarClient(session).download(source.path, MAX_FILE_BYTES, out, log)) out.toByteArray() else null
             }
         } ?: return null
-        return decode(bytes) ?: null.also { log("fichier reçu illisible comme image") }
+        return decode(bytes) ?: null.also { log("received file unreadable as a picture") }
     }
 
-    /** Réduit les grandes images à la taille de l'écran avant de les charger en mémoire. */
+    /** Scales large pictures down to the screen size before loading them into memory. */
     private fun decode(bytes: ByteArray): Bitmap? {
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
@@ -112,13 +112,13 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
     }
 
     override fun showPictures(pictures: List<LoadedPicture>, title: String?, durationMillis: Long) = onScreen {
-        log("${pictures.size} image(s)")
+        log("${pictures.size} picture(s)")
         it.showPictures(pictures, title, durationMillis)
         true
     }
 
     override fun showPage(html: String, title: String?, durationMillis: Long) = onScreen {
-        log("une page de ${html.length} caractères")
+        log("a page of ${html.length} characters")
         it.showPage(html, title, durationMillis)
         true
     }
@@ -131,8 +131,8 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
     }
 
     override fun notify(notice: Notice) = onScreen {
-        // Jamais le texte du bandeau ni de la question dans les journaux.
-        log("bandeau${if (notice.urgent) " urgent" else ""}")
+        // Never the text of the banner or question in the logs.
+        log("banner${if (notice.urgent) " urgent" else ""}")
         it.showNotice(notice)
         true
     }
@@ -140,9 +140,9 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
     override fun ask(question: Question): AskResult {
         val answers = LinkedBlockingQueue<AskResult>(1)
         if (!onScreen { it.askQuestion(question) { answer -> answers.offer(answer) } }) return AskResult.BUSY
-        log("question à l'écran")
+        log("question on screen")
         val answer = answers.poll(question.timeoutMillis + ANSWER_GRACE_MS, TimeUnit.MILLISECONDS) ?: AskResult.NO_ANSWER
-        log("question : $answer")
+        log("question: $answer")
         return answer
     }
 
@@ -161,7 +161,7 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
 
     override fun setFrame(pictures: List<LoadedPicture>, idleMinutes: Int): Int {
         val saved = FrameStore.save(context, pictures.map { (it.image as ByteArray) to it.caption }, idleMinutes)
-        log("cadre photo : $saved image(s)")
+        log("photo frame: $saved picture(s)")
         changed()
         return saved
     }
@@ -173,7 +173,7 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
 
     override fun setFeed(items: List<FeedItem>, open: Boolean): Boolean {
         if (items.isEmpty()) FeedStore.clear(context) else FeedStore.save(context, items)
-        log("fil : ${items.size} élément(s)")
+        log("feed: ${items.size} item(s)")
         changed()
         return open && onScreen {
             it.showFeed()
@@ -214,9 +214,9 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
         if (!onScreen { it.askPhoto(reason) { answer -> answers.offer(answer) } }) {
             return PhotoResult.Unavailable("the screen is busy or not in front")
         }
-        log("demande de photo à l'écran")
+        log("photo request on screen")
         val answer = answers.poll(PHOTO_WAIT_MS, TimeUnit.MILLISECONDS) ?: PhotoResult.Declined
-        log("demande de photo : ${answer.javaClass.simpleName}")
+        log("photo request: ${answer.javaClass.simpleName}")
         return answer
     }
 
@@ -224,7 +224,7 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
         main.post { presenter?.homeChanged(dimNow) }
     }
 
-    /** Exécute sur le fil principal et attend ; faux si le kiosque n'est plus là ou a refusé. */
+    /** Runs on the main thread and waits; false if the kiosk is gone or refused. */
     private fun onScreen(action: (ScreenPresenter) -> Boolean): Boolean {
         val done = CountDownLatch(1)
         val shown = AtomicBoolean()
@@ -241,7 +241,7 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
         @Volatile
         var presenter: ScreenPresenter? = null
 
-        /** La session est perdue : une réponse ne partirait plus, la question disparaît. */
+        /** The session is lost: an answer would no longer be sent, so the question disappears. */
         fun cancelQuestion() {
             main.post { presenter?.cancelQuestion() }
         }
