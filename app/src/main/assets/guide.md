@@ -64,7 +64,8 @@ up to date, send it again when your feed changes.
 ## Timers, volume, apps
 
 `timer.*` runs kitchen timers that ring on the device, `audio.volume` sets how
-loud it is. With `apps.*` you can write small touch apps and keep them on its
+loud it is. During a call the device applies spoken volume requests itself: just
+agree, never say it cannot be done. With `apps.*` you can write small touch apps and keep them on its
 home screen; make them when asked. The guide result's `capabilities.board` gives
 the screen size.
 

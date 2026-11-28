@@ -39,12 +39,15 @@ private val TEACH_SCREEN = tr(
         "announced to you as coming from a wearable, but it has a large screen. When I talk to you from it or " +
         "say “on the Portal”, use its commands rather than my phone: display.show_page and display.show_images " +
         "to show things, display.notify for a banner, display.ask to ask for my approval, apps.save for a " +
-        "small app, feed.set for my feed.",
+        "small app, feed.set for my feed. During a call, when I ask for louder, quieter or a volume level, the " +
+        "Portal does it by itself: just say OK, never that you cannot.",
     "Retiens ceci : le gadget Portal Muse est un écran tactile de 10 pouces " +
         "posé chez moi. Ses appels te sont annoncés comme venant d'un accessoire portable, mais il a un grand écran. " +
         "Quand je te parle depuis lui ou que je dis « sur le Portal », utilise ses commandes plutôt que mon " +
         "téléphone : display.show_page et display.show_images pour montrer, display.notify pour une bannière, " +
-        "display.ask pour me demander un accord, apps.save pour une petite appli, feed.set pour mon fil.",
+        "display.ask pour me demander un accord, apps.save pour une petite appli, feed.set pour mon fil. " +
+        "Pendant un appel, quand je demande plus fort, moins fort ou un niveau de volume, le Portal le fait " +
+        "lui-même : réponds simplement d'accord, sans jamais dire que tu ne peux pas.",
 )
 
 /** The kiosk's maintenance menu. [reload] reloads the dashboard. */
