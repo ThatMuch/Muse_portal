@@ -15,6 +15,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import com.portalmuse.core.FeedRefresh
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -27,10 +28,14 @@ class FeedPanel(
     root: FrameLayout,
     /** Un bouton du fil : envoie ce message à Muse. */
     private val onAsk: (String) -> Unit,
+    /** Redemande le fil sans quitter la page ; `false` si Muse est injoignable. */
+    private val onStale: (done: () -> Unit) -> Boolean,
     private val onVisibility: () -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val idle = Runnable { close() }
+    private var askedAt: Long? = null
+    private var refreshing = false
     private val updated = Ui.label(activity, 18f, Ui.FAINT)
     private val list = LinearLayout(activity).apply {
         orientation = LinearLayout.VERTICAL
@@ -91,11 +96,25 @@ class FeedPanel(
         scroll.scrollTo(0, 0)
         touched()
         onVisibility()
+        refreshIfStale()
     }
 
     /** Un nouveau fil est arrivé pendant qu'on le regarde. */
     fun refresh() {
         if (isOpen) render()
+    }
+
+    private fun refreshIfStale() {
+        val now = System.currentTimeMillis()
+        if (refreshing || !FeedRefresh.isDue(FeedStore.load(activity)?.savedAt, askedAt, now)) return
+        refreshing = onStale {
+            refreshing = false
+            refresh()
+        }
+        if (refreshing) {
+            askedAt = now
+            render()
+        }
     }
 
     fun close() {
@@ -114,14 +133,16 @@ class FeedPanel(
     private fun render() {
         list.removeAllViews()
         val feed = FeedStore.load(activity)
-        updated.text = feed?.let {
+        val date = feed?.let {
             "mis à jour " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it.savedAt))
-        }.orEmpty()
+        }
+        updated.text = if (refreshing) "mise à jour en cours…" else date.orEmpty()
         if (feed == null) {
             val name = Settings(activity).museName ?: "Muse"
             list.addView(
                 Ui.label(activity, 24f, Ui.MUTED).apply {
-                    text = "Rien pour l'instant. Touchez « Actualiser » pour demander votre fil à $name."
+                    text = if (refreshing) "$name prépare votre fil…"
+                    else "Rien pour l'instant. Touchez « Actualiser » pour demander votre fil à $name."
                 },
                 Ui.spaced(activity, top = 48),
             )
@@ -178,8 +199,12 @@ class FeedPanel(
 
     private fun dp(value: Int) = Ui.dp(activity, value)
 
-    private companion object {
-        const val REFRESH = "Envoie mon fil sur le Portal avec la commande feed.set, avec les images quand tu en as, " +
-            "et affiche-le."
+    companion object {
+        private const val REFRESH = "Envoie mon fil sur le Portal avec la commande feed.set, avec les images " +
+            "quand tu en as, et affiche-le."
+
+        /** La demande faite d'elle-même : elle ne rouvre pas une page qu'on vient de fermer. */
+        const val QUIET_REFRESH = "Mets à jour mon fil sur le Portal avec la commande feed.set, avec les images " +
+            "quand tu en as, sans l'ouvrir (open à false)."
     }
 }

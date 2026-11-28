@@ -102,7 +102,8 @@ class AppCommands(private val host: AppHost) : CommandSet {
                 "Create or replace a small touch app on the device (a shopping list, a game, a counter), kept " +
                     "on its home screen. One self-contained HTML document with inline script and style: no " +
                     "network, no external files, no camera or microphone. localStorage keeps its data. Large " +
-                    "touch targets, light text on black, 1280 x 800.",
+                    "touch targets, light text on black, 1280 x 800. When the person asks for an app from this device " +
+                    "or for it, build it with this command, not as a file elsewhere.",
                 named().put("html", Specs.field("string", "The whole document, up to $MAX_APP_CHARS characters.")),
                 JSONObject()
                     .put("title", Specs.field("string", "Name shown to the person."))

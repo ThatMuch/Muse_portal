@@ -59,8 +59,8 @@ class VoiceCallTest {
             }
         })
         val audio = FakeAudio(loudRoom, preRoll)
-        val events: MutableList<CallEvent> = Collections.synchronizedList(mutableListOf())
-        val logs: MutableList<String> = Collections.synchronizedList(mutableListOf())
+        val events: MutableList<CallEvent> = java.util.concurrent.CopyOnWriteArrayList()
+        val logs: MutableList<String> = java.util.concurrent.CopyOnWriteArrayList()
         val call: VoiceCall
         val done: CompletableFuture<CallResult>
         var media = 0L

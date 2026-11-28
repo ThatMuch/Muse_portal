@@ -43,10 +43,12 @@ messages and suggestions, and a plain blue orb where your Muse's avatar appears.
 | Area | State |
 |---|---|
 | Pairing from the Muse phone app, Noise session, reconnection | Tried on a real device |
-| Written and spoken replies, voice calls, video calls, "Hey Muse" | Tried on a real device |
+| Written and spoken replies, voice calls, video calls, "Hey Muse", goodbye hang-up | Tried on a real device |
+| Message history, photos you send, photo frame | Tried on a real device |
 | Home screen, avatar, kiosk, restart after reboot, crash or update | Tried on a real device |
-| Screen commands, night mode, photo frame, timers, apps, feed | Screens tried on the device with fake data; little use by a real Muse yet |
-| Bluetooth, photos, message history, side chat, goodbye detection | Unit tests only, or barely tried |
+| Feed | Filled by a real Muse on request; the automatic update is new |
+| Banners, questions, small apps, timers by voice | Screens tried with fake data; a real Muse tends to answer on the phone instead |
+| Bluetooth, side chat | Unit tests only |
 | Token rotation | Unit tests only |
 | Other Portal models | Unknown |
 
@@ -148,7 +150,13 @@ tools/  Dependency download, token entry.
   background of the video is blacked out on the device.
 - **"Hey Muse"** runs on the device. Audio leaves it only after the word is heard. The model is
   English; the SDK measured about 74 % detections and 0.4 false wakes per hour on synthetic voices.
-- **Feed**: a gadget has no access to the app's feed, so the Muse sends it with `feed.set`.
+- **Feed**: a gadget has no access to the app's feed, so the Muse sends it with `feed.set`. Opening an
+  empty feed, or one older than 3 hours, asks for it again (a message in your conversation, at most
+  every 30 minutes).
+- **Using the screen**: calls are announced as a `mcu-wearable`, the only device type the SDK admits
+  for them, so a Muse may not think of the screen. **What Muse may do > teach the screen** sends it a
+  message saying what the Portal can show. Your Muse's own permission requests stay on the phone: the
+  gadget protocol has no way to answer them.
 - **Night mode** only turns the light off; the device stays online and listening.
 
 Logs, which never contain message contents or tokens:
@@ -169,8 +177,8 @@ adb logcat -s PortalMuse PortalMuseBle
 - Pages and apps written by the Muse run in a WebView without network access. Pictures from the web
   must be `https` from public addresses; loading one reveals your home IP address to its host.
 - Cleartext HTTP is allowed for a local dashboard.
-- Found a security problem? Please do not publish the details in an issue: contact the maintainers
-  privately first.
+- Found a security problem? Please do not open a public issue. Report it privately from the
+  repository's **Security** tab ([report a vulnerability](https://github.com/ThatMuch/Muse_portal/security/advisories/new)).
 
 ## Not done
 

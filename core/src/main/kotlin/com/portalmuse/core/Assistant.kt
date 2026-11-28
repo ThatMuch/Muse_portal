@@ -103,7 +103,8 @@ class AssistantCommands(
     override fun specs(): Map<String, JSONObject> = linkedMapOf(
         NOTIFY to Specs.of(
             "Show a short banner on the home touchscreen for something that matters now, such as a transit " +
-                "disruption, a reminder or a deadline today. Do not use it for chit-chat.",
+                "disruption, a reminder or a deadline today. Do not use it for chit-chat. When the person asks for a " +
+                "banner on this device, use this, not their phone.",
             JSONObject().put("message", Specs.field("string", "Up to 240 characters, in the person's language.")),
             JSONObject()
                 .put("title", Specs.field("string", "Short heading."))
@@ -114,7 +115,8 @@ class AssistantCommands(
             "Ask the person to approve or reject something with two large buttons on the home touchscreen, and " +
                 "wait for the tap. Use it when a task needs a decision right away. The tap is not " +
                 "authenticated: anyone near the screen can answer. Before spending money, sending messages to " +
-                "others, deleting or anything hard to undo, also get confirmation on the phone.",
+                "others, deleting or anything hard to undo, also get confirmation on the phone. When the person " +
+                "talks to you from this device or asks to be asked here, ask here.",
             JSONObject().put("question", Specs.field("string", "The decision, one sentence, up to 300 characters.")),
             JSONObject()
                 .put("details", Specs.field("string", "What exactly will happen, up to 800 characters."))

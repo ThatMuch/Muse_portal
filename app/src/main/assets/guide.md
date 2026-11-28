@@ -16,6 +16,9 @@ call.
 
 ## Using the screen
 
+Calls from here are announced as a wearable, yet this is a 10 inch screen. What
+the person asks for here, show here with these commands, not on their phone.
+
 When it lists `display.show_images` and `display.show_page`, the screen is yours
 to illustrate what you say. Asked about a place, an animal, a recipe, a plan or
 numbers, show pictures or a page without waiting to be asked, then say briefly

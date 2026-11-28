@@ -101,7 +101,10 @@ class KioskActivity : Activity(), ScreenPresenter {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
-        menu = MaintenanceMenu(this, settings, onWakeWordChanged = ::restartListening, onHomeChanged = ::homeChanged) {
+        menu = MaintenanceMenu(
+            this, settings, onWakeWordChanged = ::restartListening, onHomeChanged = ::homeChanged,
+            tell = { conversation.sendShortcut(it) },
+        ) {
             web.clearHistory()
             loadDashboard()
         }
@@ -126,7 +129,9 @@ class KioskActivity : Activity(), ScreenPresenter {
         // Au-dessus des panneaux : on regarde ce que Muse montre tout en lui parlant.
         shown = ScreenOverlay(this, root) { panelsChanged() }
         hub = HubPanel(this, root) { panelsChanged() }
-        feed = FeedPanel(this, root, onAsk = { conversation.sendShortcut(it) }) { panelsChanged() }
+        feed = FeedPanel(this, root, onAsk = { conversation.sendShortcut(it) }, onStale = ::refreshFeed) {
+            panelsChanged()
+        }
         apps = AppPanel(this, root) { panelsChanged() }
         photoFrame = PhotoFrame(this, root)
         dimmer = NightDimmer(this, root)
@@ -387,6 +392,23 @@ class KioskActivity : Activity(), ScreenPresenter {
         conversation.refresh()
         feed.refresh()
         refreshAmbience()
+    }
+
+    /** Redemande le fil en arrière-plan : la réponse écrite reste dans la conversation. */
+    private fun refreshFeed(done: () -> Unit): Boolean {
+        val chat = MuseSession.chat(settings.chatSession()) ?: return false
+        thread(name = "feed-refresh") {
+            try {
+                chat.sendText(FeedPanel.QUIET_REFRESH)
+            } catch (e: IOException) {
+                Log.w(TAG, "fil : demande en échec (${e.javaClass.simpleName})")
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "fil : demande en échec (${e.javaClass.simpleName})")
+            } finally {
+                handler.post(done)
+            }
+        }
+        return true
     }
 
     /** Les boutons d'actions rapides, sur la page d'accueil intégrée et seulement une fois appairé. */

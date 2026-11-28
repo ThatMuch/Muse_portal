@@ -30,12 +30,20 @@ private val SENSITIVITIES = listOf(
 private const val LOCATION_PERMISSION_REQUEST = 10
 private const val CAMERA_PERMISSION_REQUEST = 11
 
+private const val TEACH_SCREEN = "Retiens ceci : le gadget Portal Muse est un écran tactile de 10 pouces " +
+    "posé chez moi. Ses appels te sont annoncés comme venant d'un accessoire portable, mais il a un grand écran. " +
+    "Quand je te parle depuis lui ou que je dis « sur le Portal », utilise ses commandes plutôt que mon " +
+    "téléphone : display.show_page et display.show_images pour montrer, display.notify pour une bannière, " +
+    "display.ask pour me demander un accord, apps.save pour une petite appli, feed.set pour mon fil."
+
 /** Menu de maintenance du kiosque. [reload] recharge le tableau de bord. */
 class MaintenanceMenu(
     private val activity: Activity,
     private val settings: Settings,
     private val onWakeWordChanged: () -> Unit,
     private val onHomeChanged: (dimNow: Boolean) -> Unit,
+    /** Envoie un message à Muse au nom de l'utilisateur et montre sa réponse. */
+    private val tell: (String) -> Unit,
     private val reload: () -> Unit,
 ) {
     private val secrets = SecretStore(activity)
@@ -94,7 +102,7 @@ class MaintenanceMenu(
                 },
             )
             add(
-                Entry("Messages écrits : conversation ${if (settings.separateChat) "à part" else "principale"}") {
+                Entry("Conversation à part pour les messages écrits : ${yes(settings.separateChat)}") {
                     settings.separateChat = !settings.separateChat
                     voiceMenu()
                 },
@@ -106,6 +114,7 @@ class MaintenanceMenu(
         "Ce que Muse peut faire",
         buildList {
             add(Entry("Utiliser l'écran : ${yes(settings.screenAllowed)}") { allowScreen(!settings.screenAllowed) })
+            if (settings.screenAllowed) add(Entry("Apprendre à Muse à utiliser cet écran", ::teachScreen))
             add(
                 Entry("Photos « Regarde ça » : ${yes(settings.cameraAllowed)}") {
                     if (settings.cameraAllowed) allowCamera(false) else enableCamera()
@@ -212,6 +221,12 @@ class MaintenanceMenu(
         service(GadgetService.ACTION_PAIRING_CHANGED)
         toast("Jetons effacés du Portal.")
     }
+
+    private fun teachScreen() = confirm(
+        "Apprendre l'écran à Muse ?",
+        "Ce message part dans votre conversation, pour que Muse s'en souvienne :\n\n« $TEACH_SCREEN »",
+        "Envoyer",
+    ) { tell(TEACH_SCREEN) }
 
     /** La session se rouvre pour déclarer, ou retirer, les commandes d'écran. */
     private fun allowScreen(allowed: Boolean) {
