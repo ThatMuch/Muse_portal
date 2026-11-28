@@ -55,7 +55,8 @@ messages and suggestions, and a plain blue orb where your Muse's avatar appears.
 | Home screen, avatar, kiosk, restart after reboot, crash or update | Tried on a real device |
 | Banners, questions, small apps, timers by voice, feed update | Tried with a real Muse, after teaching it the screen |
 | Volume by voice | Tried on a real device |
-| Automatic updates, cards, web page hand-off, alarms, radio, other voice requests | New: unit tests, barely tried on a device |
+| Automatic updates, cards on the home and idle screens, radio | Tried on a real device |
+| Web page hand-off, send to phone, alarms, voice requests other than volume | New: unit tests only |
 | Bluetooth, side chat | Unit tests only |
 | Token rotation | Unit tests only |
 | Other Portal models | Unknown |
