@@ -381,7 +381,11 @@ class VideoCall(
 
     /** The same sentence arrives both as a transcription and as a message: it counts once. */
     private fun volume(said: String) {
-        val request = VolumeRequest.parse(said, museName) ?: return
+        val request = VolumeRequest.parse(said, museName)
+        if (request == null) {
+            if (VolumeRequest.mentions(said)) log("loudness mentioned, no volume request recognized")
+            return
+        }
         val last = volumeAsked
         if (last != null && last.first == request && clock() - last.second < SAME_REQUEST_MS) return
         volumeAsked = request to clock()

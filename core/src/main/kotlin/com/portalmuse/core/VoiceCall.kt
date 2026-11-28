@@ -333,6 +333,9 @@ class VoiceCall(
         val text = (event.opt(field) as? String)?.takeIf { it.isNotEmpty() && it.length <= MAX_HELD_TEXT_CHARS } ?: return
         onEvent(CallEvent.Heard(item, text, final))
         if (final && volumeItems.size < MAX_VOLUME_ITEMS && volumeItems.add(item)) {
+            if (VolumeRequest.parse(text) == null && VolumeRequest.mentions(text)) {
+                log("loudness mentioned, no volume request recognized")
+            }
             VolumeRequest.parse(text)?.let {
                 log("volume asked aloud")
                 onEvent(CallEvent.Volume(it))
