@@ -160,7 +160,8 @@ tools/  Dependency download, token entry.
   gadget protocol has no way to answer them.
 - **Night mode** only turns the light off; the device stays online and listening.
 - **Volume by voice**: during a call, a short sentence such as "turn it up" or "set the volume to 50"
-  is applied by the Portal itself, as a Muse does not always send `audio.volume`.
+  is applied by the Portal itself, as a Muse does not always send `audio.volume`. It beeps and
+  silences the Muse's reply to that sentence, which tends to say it cannot do it.
 
 Logs, which never contain message contents or tokens:
 

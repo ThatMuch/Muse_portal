@@ -89,6 +89,7 @@ class VideoCall(
     @Volatile private var stopAsked = 0L
     @Volatile private var goodbyeAt = 0L
     private var volumeAsked: Pair<VolumeRequest, Long>? = null
+    private val mute = ReplyMute()
     /** Last time someone spoke in front of this device. */
     @Volatile private var spokeAt = 0L
     private var events: MuseStream? = null
@@ -235,15 +236,17 @@ class VideoCall(
                 if (opus != null) {
                     val pcm = audio.decode(opus)
                     if (pcm.isNotEmpty()) {
-                        if (rms(pcm) > AUDIBLE_RMS) {
+                        val voice = rms(pcm) > AUDIBLE_RMS
+                        val muted = mute.drops(voice, clock())
+                        if (voice) {
                             museAudible++
                             // The microphone is muted before the sound comes out.
-                            playingUntil = clock() + pcm.size / 96 + SETTLE_MS
+                            if (!muted) playingUntil = clock() + pcm.size / 96 + SETTLE_MS
                             loud.addLast(clock())
                             while (loud.isNotEmpty() && clock() - loud.first() > SUSTAINED_MS) loud.removeFirst()
                             if (loud.size >= SUSTAINED) activity = clock()
                         }
-                        audio.play(pcm)
+                        if (!muted) audio.play(pcm)
                     }
                 }
                 val now = clock() < playingUntil
@@ -382,6 +385,7 @@ class VideoCall(
         val last = volumeAsked
         if (last != null && last.first == request && clock() - last.second < SAME_REQUEST_MS) return
         volumeAsked = request to clock()
+        mute.start(clock())
         log("volume asked aloud")
         onEvent(CallEvent.Volume(request))
     }

@@ -336,6 +336,8 @@ class VoiceCall(
             VolumeRequest.parse(text)?.let {
                 log("volume asked aloud")
                 onEvent(CallEvent.Volume(it))
+                // The device has done it: the reply, often "I cannot", is not played.
+                interrupt()
             }
         }
     }

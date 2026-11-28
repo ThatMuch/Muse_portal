@@ -154,7 +154,11 @@ class MuseCall(
 
     /** The volume is set here; the screen gets everything else too. */
     private fun event(event: CallEvent) {
-        if (event is CallEvent.Volume) Loudness.apply(context, event.request)
+        if (event is CallEvent.Volume) {
+            Loudness.apply(context, event.request)
+            // Muse's reply is silenced: this beep, at the new volume, says it is done.
+            Chime.heard()
+        }
         onEvent(event)
     }
 
