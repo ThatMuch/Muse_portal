@@ -21,6 +21,12 @@ object KioskReturn {
         prefs(context).edit().putBoolean("front", shown).commit()
     }
 
+    /** Brings the kiosk to the front for something that cannot wait, such as an alarm. */
+    fun show(context: Context) {
+        if (!SystemSettings.canDrawOverlays(context)) return
+        context.startActivity(Intent(context, KioskActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     /** [afterUpdate]: an update is not a failure and does not count toward the limit. */
     fun reopen(context: Context, afterUpdate: Boolean = false) {
         val prefs = prefs(context)

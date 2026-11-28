@@ -50,6 +50,24 @@
                    min-height: 64px; padding: 0 24px; font-size: 19px; color: #8e8e93; }
   #timers b { font-size: 32px; font-weight: 400; color: #fff; font-variant-numeric: tabular-nums; }
   .has-timers #time { font-size: min(14vw, 21vh); }
+  #chips { display: flex; gap: 12px; flex-wrap: wrap; }
+  #chips:not(:empty) { margin-top: 20px; }
+  #chips button { background: #1c1c1e; border-radius: 32px; min-height: 64px; padding: 0 24px; font-size: 20px; }
+
+  #cards { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 12px; min-height: 128px; }
+  .card { background: #1c1c1e; border-radius: 24px; padding: 8px 6px 8px 16px; display: flex; gap: 10px;
+          align-items: center; min-width: 0; height: 136px; }
+  .card.important { box-shadow: inset 4px 0 0 #d9453d; }
+  .card .icon { font-size: 28px; }
+  .card .words { flex: 1; min-width: 0; }
+  /* Cut after a few lines, with an ellipsis: the whole text shows on the idle screen. */
+  .card b, .card span { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
+  .card b { font-size: 18px; font-weight: 600; -webkit-line-clamp: 2; }
+  .card span { font-size: 14px; color: #aeaeb2; margin-top: 4px; -webkit-line-clamp: 4; }
+  .card .touch { display: flex; flex-direction: column; gap: 4px; }
+  .card button { width: 44px; height: 52px; border-radius: 16px; color: #8e8e93; display: grid; place-items: center; }
+  .card button svg { width: 22px; height: 22px; }
+  .card button:active { background: #3a3a3c; }
 
   footer { height: 144px; display: flex; align-items: flex-end; padding-bottom: 52px; }
   #shortcuts { display: flex; gap: 12px; min-width: 0; max-width: calc(100% - 208px); }
@@ -93,6 +111,7 @@
       </button>
       <button id="choose" type="button" hidden data-fr="Ajouter la météo">Add the weather</button>
       <div id="timers" hidden></div>
+      <div id="chips"></div>
     </div>
     <div class="muse">
       <video id="avatar" hidden muted loop autoplay playsinline disableremoteplayback></video>
@@ -100,6 +119,7 @@
     </div>
   </section>
   <section id="days"></section>
+  <section id="cards" hidden></section>
   <footer><nav id="shortcuts" hidden></nav><span id="status"></span></footer>
 </main>
 
@@ -159,6 +179,8 @@ const ICONS = {
   drizzle: HIGH_CLOUD + '<path d="M8.5 18v1M12.5 20v1M16.5 18v1"/>',
   rain: HIGH_CLOUD + '<path d="M9 18l-1.2 3M13 18l-1.2 3M17 18l-1.2 3"/>',
   snow: HIGH_CLOUD + '<path d="M8.5 18.5h.01M12.5 21h.01M16.5 18.5h.01" stroke-width="2.4"/>',
+  cross: '<path d="M6 6l12 12M18 6L6 18"/>',
+  phone: '<path d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2"/>',
   storm: HIGH_CLOUD + '<path d="M13 16.5l-2.5 3h3l-2.5 3"/>',
 };
 
@@ -337,13 +359,51 @@ function drawTimers() {
     return chip;
   }));
   box.hidden = timers.length === 0;
-  document.body.classList.toggle("has-timers", timers.length > 0);
+  document.body.classList.toggle("has-timers", timers.length > 0 || byId("chips").childElementCount > 0);
 }
 window.setTimers = (list) => { timers = list; drawTimers(); };
 // Redrawn only when there are some: a touch is not lost between two redraws.
 setInterval(() => { if (timers.length && !document.hidden) drawTimers(); }, 1000);
 
 window.setListening = (listening) => { byId("listening").hidden = !listening; };
+
+// The radio and the next alarms: a touch asks the app to stop or remove them.
+window.setChips = (list) => {
+  byId("chips").replaceChildren(...list.map((chip) => {
+    const button = element("button", "", chip.text + "  ✕");
+    button.type = "button";
+    button.addEventListener("click", () => { location.href = "portal-chip:" + chip.id; });
+    return button;
+  }));
+  document.body.classList.toggle("has-timers", timers.length > 0 || list.length > 0);
+};
+
+// Muse's cards take the place of the forecast. Each can be sent to the phone or dismissed.
+window.setCards = (list) => {
+  const box = byId("cards");
+  box.replaceChildren(...list.map((card, index) => {
+    const node = element("div", card.important ? "card important" : "card", "");
+    if (card.icon) node.append(element("div", "icon", card.icon));
+    const words = element("div", "words", "");
+    words.append(element("b", "", card.title));
+    if (card.text) words.append(element("span", "", card.text));
+    const touch = element("div", "touch", "");
+    for (const [action, icon, name] of [
+      ["remove", "cross", t("Dismiss", "Retirer")], ["send", "phone", t("To my phone", "Sur mon téléphone")],
+    ]) {
+      const button = element("button", "", "");
+      button.append(drawing(icon));
+      button.type = "button";
+      button.setAttribute("aria-label", name);
+      button.addEventListener("click", () => { location.href = "portal-card:" + action + "-" + index; });
+      touch.append(button);
+    }
+    node.append(words, touch);
+    return node;
+  }));
+  box.hidden = list.length === 0;
+  byId("days").hidden = list.length > 0;
+};
 
 // Called by the app, which provides the avatar and the quick action buttons. A touch is reported to it
 // through an address it intercepts; only the app knows the message to send.

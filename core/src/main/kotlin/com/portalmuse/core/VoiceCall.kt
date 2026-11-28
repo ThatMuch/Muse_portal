@@ -50,17 +50,17 @@ sealed class CallEvent {
     data class Words(val text: String, val final: Boolean) : CallEvent()
     /** What Muse heard for a speech turn: an addition, or the whole text when [final]. */
     data class Heard(val item: String, val text: String, val final: Boolean) : CallEvent()
-    /** The caller asked aloud for another volume. */
-    data class Volume(val request: VolumeRequest) : CallEvent()
+    /** The caller asked aloud for something the device does itself. */
+    data class Local(val request: LocalRequest) : CallEvent()
     /** Muse judged that this speech turn was not addressed to it: it will not answer. */
     data class Ignored(val item: String) : CallEvent()
 }
 
 /**
- * [NOTHING_ASKED]: no request heard after a call opened by the wake word. [VOLUME]: the caller asked for another
- * volume, which the device applies before hanging up.
+ * [NOTHING_ASKED]: no request heard after a call opened by the wake word. [DONE_HERE]: the caller asked for
+ * something the device does itself, such as the volume, and the call ends.
  */
-enum class CallEnd { REMOTE_END, REMOTE_STOP, HUNG_UP, IDLE, TOO_LONG, NOTHING_ASKED, GOODBYE, VOLUME }
+enum class CallEnd { REMOTE_END, REMOTE_STOP, HUNG_UP, IDLE, TOO_LONG, NOTHING_ASKED, GOODBYE, DONE_HERE }
 
 enum class CallFailure { REFUSED, NOT_READY, PROTOCOL, CONNECTION }
 
@@ -71,7 +71,7 @@ sealed class CallResult {
 
 private class CallProblem(val failure: CallFailure, message: String, val status: Int? = null) : Exception(message)
 
-private const val MAX_VOLUME_ITEMS = 200
+private const val MAX_LOCAL_ITEMS = 200
 
 /**
  * A real-time voice call, on a connection reserved for voice. Half duplex: the microphone is muted while Muse
@@ -128,7 +128,7 @@ class VoiceCall(
     /** Start of the ongoing speech, as long as the server has neither closed nor dropped it. */
     private var speakingSince: Long? = null
     private var turnHeard = false
-    private val volumeItems = HashSet<String>()
+    private val localItems = HashSet<String>()
     /** Diagnostic counters: types and quantities, never content. */
     private val receivedTypes = LinkedHashMap<String, Int>()
     private var sentFrames = 0
@@ -141,7 +141,7 @@ class VoiceCall(
     @Volatile private var ready = false
     @Volatile private var ended = false
     @Volatile private var hungUp = false
-    @Volatile private var volumeDone = false
+    @Volatile private var doneHere = false
     @Volatile private var workerFailure: CallProblem? = null
 
     /** Hangs up. */
@@ -259,7 +259,7 @@ class VoiceCall(
         workerFailure?.let { throw it }
         val now = clock()
         if (hungUp) return CallEnd.HUNG_UP
-        if (volumeDone) return CallEnd.VOLUME
+        if (doneHere) return CallEnd.DONE_HERE
         if (now - started >= overallTimeoutMillis) return CallEnd.TOO_LONG
         if (!ready && now - started >= minOf(readyTimeoutMillis, overallTimeoutMillis)) {
             throw CallProblem(CallFailure.NOT_READY, "the call did not start in time")
@@ -337,16 +337,16 @@ class VoiceCall(
         val item = identifier(event.opt("item_id")) ?: return
         val text = (event.opt(field) as? String)?.takeIf { it.isNotEmpty() && it.length <= MAX_HELD_TEXT_CHARS } ?: return
         onEvent(CallEvent.Heard(item, text, final))
-        if (final && volumeItems.size < MAX_VOLUME_ITEMS && volumeItems.add(item)) {
-            if (VolumeRequest.parse(text) == null && VolumeRequest.mentions(text)) {
-                log("loudness mentioned, no volume request recognized")
-            }
-            VolumeRequest.parse(text)?.let {
-                log("volume asked aloud")
-                onEvent(CallEvent.Volume(it))
+        if (final && localItems.size < MAX_LOCAL_ITEMS && localItems.add(item)) {
+            val request = LocalRequest.parse(text)
+            if (request != null) {
+                log("request handled by the device")
+                onEvent(CallEvent.Local(request))
                 // Nothing left to say: the reply is cut off and the call ends.
                 interrupt()
-                volumeDone = true
+                doneHere = true
+            } else if (LocalRequest.mentions(text)) {
+                log("device request mentioned, none recognized")
             }
         }
     }

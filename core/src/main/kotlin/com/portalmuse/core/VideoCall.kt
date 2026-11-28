@@ -88,8 +88,8 @@ class VideoCall(
     @Volatile private var media: MediaSession? = null
     @Volatile private var stopAsked = 0L
     @Volatile private var goodbyeAt = 0L
-    private var volumeAsked: Pair<VolumeRequest, Long>? = null
-    @Volatile private var volumeDone = false
+    private var handled: Pair<LocalRequest, Long>? = null
+    @Volatile private var doneHere = false
     /** Last time someone spoke in front of this device. */
     @Volatile private var spokeAt = 0L
     private var events: MuseStream? = null
@@ -244,8 +244,8 @@ class VideoCall(
                             while (loud.isNotEmpty() && clock() - loud.first() > SUSTAINED_MS) loud.removeFirst()
                             if (loud.size >= SUSTAINED) activity = clock()
                         }
-                        // After a volume request the call is ending: the reply to it is not started.
-                        if (!volumeDone) audio.play(pcm)
+                        // After a request the device handled, the call is ending: the reply is not started.
+                        if (!doneHere) audio.play(pcm)
                     }
                 }
                 val now = clock() < playingUntil
@@ -265,7 +265,7 @@ class VideoCall(
         while (true) {
             val now = clock()
             if (hungUp) return CallEnd.HUNG_UP
-            if (volumeDone) return CallEnd.VOLUME
+            if (doneHere) return CallEnd.DONE_HERE
             if (session.lost || now - session.lastMediaAt > mediaTimeoutMillis) {
                 // Muse hanging up cuts its media; without any packet at all, it is the connection.
                 if (session.stats.audioPackets + session.stats.videoFrames > 0) return CallEnd.REMOTE_END
@@ -348,7 +348,7 @@ class VideoCall(
         if (shapes.size < 14 && shapes.add(shape)) log("shape of a voice event (call recognized: $ours): $shape")
         val here = ours || spokeAt != 0L && clock() - spokeAt < OWN_SPEECH_MS
         for (item in VoiceEvents.objects(event)) {
-            if (here && item.opt("type") == HEARD) (item.opt("transcript") as? String)?.let(::volume)
+            if (here && item.opt("type") == HEARD) (item.opt("transcript") as? String)?.let(::local)
             val stop = item.opt("type") == "session_control" &&
                 (item.opt("name") as? String)?.trim().equals("stop", ignoreCase = true)
             val goodbye = item.opt("type") == HEARD &&
@@ -372,7 +372,7 @@ class VideoCall(
         val said = listOf("display_text", "transcript", "content", "text")
             .firstNotNullOfOrNull { (payload.opt(it) as? String)?.takeIf { value -> value.isNotBlank() } } ?: return
         val here = spokeAt != 0L && clock() - spokeAt < OWN_SPEECH_MS
-        if (here) volume(said)
+        if (here) local(said)
         if (here && goodbyeAt == 0L && Farewell.matches(said, museName)) {
             log("“goodbye” heard")
             goodbyeAt = clock()
@@ -380,18 +380,18 @@ class VideoCall(
     }
 
     /** The same sentence arrives both as a transcription and as a message: it counts once. */
-    private fun volume(said: String) {
-        val request = VolumeRequest.parse(said, museName)
+    private fun local(said: String) {
+        val request = LocalRequest.parse(said, museName)
         if (request == null) {
-            if (VolumeRequest.mentions(said)) log("loudness mentioned, no volume request recognized")
+            if (LocalRequest.mentions(said)) log("device request mentioned, none recognized")
             return
         }
-        val last = volumeAsked
+        val last = handled
         if (last != null && last.first == request && clock() - last.second < SAME_REQUEST_MS) return
-        volumeAsked = request to clock()
-        log("volume asked aloud")
-        onEvent(CallEvent.Volume(request))
-        volumeDone = true
+        handled = request to clock()
+        log("request handled by the device")
+        onEvent(CallEvent.Local(request))
+        doneHere = true
     }
 
     /** A small request to the VM, which answers `{"ok":true,"result":{…}}`. */

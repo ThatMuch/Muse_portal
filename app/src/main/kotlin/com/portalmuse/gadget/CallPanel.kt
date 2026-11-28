@@ -286,8 +286,8 @@ class CallPanel(
                 line.text = if (event.final) event.text.trim() else line.text + event.text
                 render()
             }
-            // Already applied by the call; Android's slider shows the level.
-            is CallEvent.Volume -> Unit
+            // Already carried out; the call is ending.
+            is CallEvent.Local -> Unit
             is CallEvent.Ignored -> {
                 avatar.state = AvatarView.State.IDLE
                 lines["user-${event.item}"]?.ignored = true
@@ -311,8 +311,8 @@ class CallPanel(
     private fun ended(outcome: MuseCall.Outcome) {
         val result = (outcome as? MuseCall.Outcome.Finished)?.result
         val end = (result as? CallResult.Ended)?.end
-        // Hung up, woken without a request, or only the volume to set: nothing to read.
-        if (end == CallEnd.HUNG_UP || end == CallEnd.NOTHING_ASKED || end == CallEnd.VOLUME) return close()
+        // Hung up, woken without a request, or something the device did itself: nothing to read.
+        if (end == CallEnd.HUNG_UP || end == CallEnd.NOTHING_ASKED || end == CallEnd.DONE_HERE) return close()
         if (videoCall && end == null) {
             // Video could not be set up: the same call carries on by voice. What was said after "Hey Muse" is
             // then lost.
@@ -361,7 +361,7 @@ class CallPanel(
                 )
                 CallEnd.TOO_LONG -> tr("Call ended: 5 minutes at most.", "Appel terminé : 5 minutes au maximum.")
                 CallEnd.GOODBYE -> tr("Goodbye.", "Au revoir.")
-                CallEnd.VOLUME -> tr("Volume set.", "Volume réglé.")
+                CallEnd.DONE_HERE -> tr("Done.", "C'est fait.")
                 CallEnd.NOTHING_ASKED -> tr(
                     "No request heard: call ended.",
                     "Aucune demande entendue : appel terminé.",

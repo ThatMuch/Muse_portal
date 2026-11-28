@@ -1,5 +1,12 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.Station
+import com.portalmuse.core.RadioHost
+import com.portalmuse.core.HandoffHost
+import com.portalmuse.core.CardHost
+import com.portalmuse.core.Card
+import com.portalmuse.core.AlarmHost
+import com.portalmuse.core.Alarm
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -52,6 +59,8 @@ interface ScreenPresenter {
 
     fun showFeed()
 
+    fun openUrl(url: String, title: String?)
+
     /** False if the app does not exist. */
     fun openApp(name: String): Boolean
 
@@ -63,7 +72,8 @@ interface ScreenPresenter {
 }
 
 /** Connects the commands received from Muse to the kiosk, when it is on screen, and to the settings. */
-class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, HomeHost, AppHost, FeedHost {
+class ScreenBridge(context: Context) :
+    ScreenHost, AssistantHost, CameraHost, HomeHost, AppHost, FeedHost, CardHost, HandoffHost, AlarmHost, RadioHost {
     private val context = context.applicationContext
     private val settings = Settings(this.context)
     private val log: (String) -> Unit = { Log.i(TAG, "screen: $it") }
@@ -178,6 +188,33 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
             true
         }
     }
+
+    override fun setCards(cards: List<Card>) {
+        CardStore.set(context, cards)
+        log("cards: ${cards.size}")
+        changed()
+    }
+
+    override fun openUrl(url: String, title: String?) = onScreen {
+        log("a web page")
+        it.openUrl(url, title)
+        true
+    }
+
+    override fun addAlarm(alarm: Alarm) = AlarmCenter.add(alarm)
+
+    override fun alarms() = AlarmCenter.alarms()
+
+    override fun cancelAlarms(id: Int?) = AlarmCenter.cancel(id)
+
+    override fun playRadio(station: Station) {
+        log("radio: ${station.id}")
+        RadioCenter.play(context, station)
+    }
+
+    override fun stopRadio() = RadioCenter.stop()
+
+    override fun radio() = RadioCenter.station
 
     override fun startTimer(durationMillis: Long, label: String?) =
         TimerCenter.start(durationMillis, label)?.let(TimerCenter::describe)

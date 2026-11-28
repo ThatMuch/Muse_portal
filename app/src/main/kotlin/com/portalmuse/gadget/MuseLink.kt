@@ -1,5 +1,9 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.RadioCommands
+import com.portalmuse.core.HandoffCommands
+import com.portalmuse.core.CardCommands
+import com.portalmuse.core.AlarmCommands
 import com.portalmuse.core.tr
 import android.app.ActivityManager
 import android.content.Context
@@ -129,6 +133,8 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
                 arrayOf(
                     DisplayCommands(screen),
                     AssistantCommands(screen) { Clock.minuteOfDay() to System.currentTimeMillis() },
+                    CardCommands(screen),
+                    HandoffCommands(screen),
                 )
             } else {
                 emptyArray()
@@ -145,7 +151,8 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
             }
             val camera = if (settings.cameraAllowed && settings.screenAllowed) listOf(CameraCommands(screen)) else emptyList()
             val apps = if (settings.screenAllowed) listOf(AppCommands(screen), FeedCommands(screen)) else emptyList()
-            val extra = (listOf<CommandSet>(HomeCommands(screen)) + apps + bluetooth + camera).toTypedArray()
+            val home = listOf(HomeCommands(screen), AlarmCommands(screen), RadioCommands(screen))
+            val extra = (home + apps + bluetooth + camera).toTypedArray()
             val commands = DeviceCommands({ health(version) }, guide, *onScreen, *extra, capabilities = board())
             lateinit var session: LinkSession
             session = LinkSession(
@@ -227,6 +234,7 @@ class MuseLink(context: Context, private val onStatus: (String) -> Unit, private
                 FrameStore.clear(context)
                 AppStore.clear(context)
                 FeedStore.clear(context)
+                CardStore.clear(context)
                 Settings(context).forgetChatSession()
                 BleCentral.closeAll()
                 Settings(context).forgetBluetoothDevices()

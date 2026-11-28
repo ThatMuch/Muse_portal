@@ -1,5 +1,7 @@
 package com.portalmuse.gadget
 
+import android.os.Looper
+import android.os.Handler
 import android.content.Context
 import android.util.Log
 import com.portalmuse.core.CallEvent
@@ -154,10 +156,10 @@ class MuseCall(
 
     /** The volume is set here; the screen gets everything else too. */
     private fun event(event: CallEvent) {
-        if (event is CallEvent.Volume) {
-            Loudness.apply(context, event.request)
-            // The call ends right away: this beep, at the new volume, says it is done.
-            Chime.heard()
+        if (event is CallEvent.Local) {
+            Handler(Looper.getMainLooper()).post {
+                LocalActions.apply(context, event.request) { ScreenBridge.presenter?.homeChanged(it) }
+            }
         }
         onEvent(event)
     }

@@ -313,8 +313,8 @@ class VoiceCallTest {
                 .put("transcript", "Mets le volume à 50"),
         )
         endCall()
-        assertEquals(CallResult.Ended(CallEnd.VOLUME), result())
-        assertTrue(CallEvent.Volume(VolumeRequest.Level(50)) in events)
+        assertEquals(CallResult.Ended(CallEnd.DONE_HERE), result())
+        assertTrue(CallEvent.Local(LocalRequest.Volume(VolumeRequest.Level(50))) in events)
     }
 
     /** False alarm of the wake word: noise, but no request recognized. */

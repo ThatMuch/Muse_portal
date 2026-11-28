@@ -1,5 +1,7 @@
 package com.portalmuse.gadget
 
+import com.portalmuse.core.Stations
+import android.app.AlertDialog
 import com.portalmuse.core.tr
 import android.Manifest
 import android.annotation.SuppressLint
@@ -51,6 +53,11 @@ private const val TICK_MS = 5_000L
 private const val NIGHT_WAKE_MS = 30_000L
 private const val SHORTCUT_SCHEME = "portal-shortcut"
 private const val TIMER_SCHEME = "portal-timer"
+private const val CARD_SCHEME = "portal-card"
+private const val CHIP_SCHEME = "portal-chip"
+private const val NEWS_IDLE_MINUTES = 5
+private const val NEWS_FROM_FEED = 4
+private const val CHIP_ALARMS = 2
 
 /** Full screen dashboard. Hidden menu: hold the bottom left corner. */
 class KioskActivity : Activity(), ScreenPresenter {
@@ -68,6 +75,8 @@ class KioskActivity : Activity(), ScreenPresenter {
     private lateinit var feed: FeedPanel
     private lateinit var hub: HubPanel
     private lateinit var alarm: TimerPanel
+    private lateinit var wakeUp: AlarmPanel
+    private lateinit var page: WebPanel
     private lateinit var notices: Notices
     private var keyboardShown = false
     /** Last touch: at night, the screen stays lit for a moment afterwards. */
@@ -78,6 +87,7 @@ class KioskActivity : Activity(), ScreenPresenter {
     private val ticker = object : Runnable {
         override fun run() {
             refreshAmbience()
+            if (::phone.isInitialized && !phone.isOpen && !conversation.isOpen) Proactive.check(this@KioskActivity)
             handler.postDelayed(this, TICK_MS)
         }
     }
@@ -128,7 +138,8 @@ class KioskActivity : Activity(), ScreenPresenter {
         // The Portal's volume buttons set the volume of Muse's voice.
         volumeControlStream = AudioManager.STREAM_MUSIC
         // Above the panels: you look at what Muse shows while talking to it.
-        shown = ScreenOverlay(this, root) { panelsChanged() }
+        shown = ScreenOverlay(this, root, ::sendShownToPhone) { panelsChanged() }
+        page = WebPanel(this, root, ::sendLinkToPhone) { panelsChanged() }
         hub = HubPanel(this, root) { panelsChanged() }
         feed = FeedPanel(this, root, onAsk = { conversation.sendShortcut(it) }, onStale = ::refreshFeed) {
             panelsChanged()
@@ -145,6 +156,7 @@ class KioskActivity : Activity(), ScreenPresenter {
             panelsChanged()
         }
         alarm = TimerPanel(this, root) { panelsChanged() }
+        wakeUp = AlarmPanel(this, root) { panelsChanged() }
         notices = Notices(this, root) { refreshAmbience() }
         root.addView(pairingBanner)
         wakeHint = TextView(this).apply {
@@ -176,6 +188,8 @@ class KioskActivity : Activity(), ScreenPresenter {
     override fun onStart() {
         super.onStart()
         TimerCenter.onChange = ::timersChanged
+        AlarmCenter.onChange = ::alarmsChanged
+        RadioCenter.onChange = ::showChipsOnHome
         AvatarStore.observe(avatarChanged)
         showAvatarOnHome()
         PairingStatus.observe {
@@ -192,6 +206,9 @@ class KioskActivity : Activity(), ScreenPresenter {
         AvatarStore.remove(avatarChanged)
         // No listening once the kiosk is off screen: the call is hung up.
         TimerCenter.onChange = null
+        AlarmCenter.onChange = null
+        RadioCenter.onChange = null
+        page.close()
         hub.close()
         apps.close()
         feed.close()
@@ -216,6 +233,8 @@ class KioskActivity : Activity(), ScreenPresenter {
         lastUse = SystemClock.elapsedRealtime()
         showShortcutsOnHome()
         timersChanged()
+        alarmsChanged()
+        showCardsOnHome()
         ticker.run()
     }
 
@@ -283,6 +302,8 @@ class KioskActivity : Activity(), ScreenPresenter {
         if (!::notices.isInitialized) return
         shown.bottomRoom = conversation.isOpen || phone.isOpen
         apps.bottomRoom = conversation.isOpen || phone.isOpen
+        page.bottomRoom = conversation.isOpen || phone.isOpen
+        RadioCenter.hold(phone.isOpen || conversation.isOpen || AlarmCenter.ringing != null)
         lastUse = SystemClock.elapsedRealtime()
         refreshAmbience()
         pauseHomeAvatar()
@@ -291,7 +312,7 @@ class KioskActivity : Activity(), ScreenPresenter {
     /** A panel asks for attention: no photo frame and no dimming. */
     private fun busy() =
         phone.isOpen || conversation.isOpen || shown.isOpen || questions.isOpen || photos.isOpen || apps.isOpen ||
-            feed.isOpen || hub.isOpen || alarm.isOpen || PairingStatus.open
+            feed.isOpen || hub.isOpen || alarm.isOpen || wakeUp.isOpen || page.isOpen || PairingStatus.open
 
     /** Applies night mode and opens or closes the photo frame, depending on the time and inactivity. */
     private fun refreshAmbience() {
@@ -302,18 +323,134 @@ class KioskActivity : Activity(), ScreenPresenter {
         val free = !busy() && !keyboardShown
         dimmer.dimmed = night && free && !notices.hasUrgent && (lastTouch == 0L || now - lastTouch >= NIGHT_WAKE_MS)
         holdNotices()
-        val photos = if (!night && free && settings.screenAllowed) FrameStore.load(this) else null
+        val allowed = !night && free && settings.screenAllowed
+        val frame = if (allowed) FrameStore.load(this) else null
+        val news = if (allowed) ambientNews() else emptyList()
         val wasOpen = photoFrame.isOpen
-        if (photos == null) {
+        val idleMillis = (frame?.idleMinutes ?: NEWS_IDLE_MINUTES) * 60_000L
+        if (frame == null && news.isEmpty()) {
             photoFrame.close()
-        } else if (wasOpen || (resumed && hasWindowFocus() && now - lastUse >= photos.idleMinutes * 60_000L)) {
-            photoFrame.open(photos)
+        } else if (wasOpen || (resumed && hasWindowFocus() && now - lastUse >= idleMillis)) {
+            photoFrame.open(frame, news)
         }
         // In the dark there is no point decoding the home video.
         if (wasOpen != photoFrame.isOpen || wasDimmed != dimmer.dimmed) pauseHomeAvatar()
     }
 
-    /** "More": the Feed, messages, photo and apps, depending on what is allowed. */
+    /** What Muse has to say on the idle screen: the cards, then the first suggestions of the feed. */
+    private fun ambientNews(): List<Info> {
+        val muse = settings.museName ?: "Muse"
+        val cards = CardStore.load(this).map {
+            val kind = if (it.important) tr("Do not miss", "À ne pas manquer") else tr("From $muse", "De la part de $muse")
+            Info(kind, it.icon, it.title, it.text, it.important)
+        }
+        val suggestions = FeedStore.load(this)?.items.orEmpty().take(NEWS_FROM_FEED).map {
+            Info(tr("In your feed", "Dans votre fil"), it.icon, it.title, it.text, picture = it.image as? File)
+        }
+        return cards + suggestions
+    }
+
+    private fun sendShownToPhone(heading: String?) {
+        val what = heading?.let { tr(" (“$it”)", " (« $it »)") }.orEmpty()
+        conversation.sendShortcut(
+            tr(
+                "Send to our conversation, so that I have it on my phone, what you just showed on the Portal$what.",
+                "Envoie dans notre conversation, pour que je l'aie sur mon téléphone, ce que tu viens d'afficher sur le Portal$what.",
+            ),
+        )
+    }
+
+    private fun sendLinkToPhone(url: String) {
+        conversation.sendShortcut(
+            tr(
+                "Give me this link in our conversation, to open it on my phone: $url",
+                "Donne-moi ce lien dans notre conversation, pour l'ouvrir sur mon téléphone : $url",
+            ),
+        )
+    }
+
+    private fun showCardsOnHome() {
+        if (!::web.isInitialized || web.url != Settings.WELCOME_URL) return
+        val cards = if (settings.screenAllowed) CardStore.load(this) else emptyList()
+        val list = JSONArray(
+            cards.map {
+                JSONObject().put("title", it.title).put("text", it.text.orEmpty()).put("icon", it.icon.orEmpty())
+                    .put("important", it.important)
+            },
+        )
+        web.evaluateJavascript("window.setCards && window.setCards($list)", null)
+    }
+
+    /** The radio that plays and the next alarms, each removed with a touch. */
+    private fun showChipsOnHome() {
+        if (!::web.isInitialized || web.url != Settings.WELCOME_URL) return
+        val chips = JSONArray()
+        RadioCenter.station?.let { chips.put(JSONObject().put("id", "radio").put("text", "📻 ${it.name}")) }
+        AlarmCenter.alarms().take(CHIP_ALARMS).forEach {
+            chips.put(JSONObject().put("id", "alarm-${it.id}").put("text", "⏰ ${it.time}"))
+        }
+        web.evaluateJavascript("window.setChips && window.setChips($chips)", null)
+    }
+
+    private fun cardTouched(action: String) {
+        val parts = action.split('-')
+        val position = parts.getOrNull(1)?.toIntOrNull() ?: return
+        val card = CardStore.load(this).getOrNull(position) ?: return
+        if (parts[0] == "send") {
+            val note = listOfNotNull(card.title, card.text).joinToString(" : ")
+            conversation.sendShortcut(
+                tr(
+                    "Send me this note from the Portal in our conversation, to keep it on my phone: $note",
+                    "Envoie-moi dans notre conversation cette note du Portal, pour la garder sur mon téléphone : $note",
+                ),
+            )
+        } else {
+            CardStore.remove(this, position)
+            showCardsOnHome()
+        }
+    }
+
+    private fun chipTouched(id: String) {
+        if (id == "radio") {
+            RadioCenter.stop()
+            return
+        }
+        val alarmId = id.removePrefix("alarm-").toIntOrNull() ?: return
+        val found = AlarmCenter.alarms().firstOrNull { it.id == alarmId } ?: return
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+            .setTitle(tr("Remove the ${found.time} alarm?", "Supprimer le réveil de ${found.time} ?"))
+            .setPositiveButton(tr("Remove", "Supprimer")) { _, _ -> AlarmCenter.cancel(alarmId) }
+            .setNegativeButton(tr("Keep", "Garder"), null)
+            .show()
+    }
+
+    private fun alarmsChanged() {
+        if (!::notices.isInitialized) return
+        if (AlarmCenter.ringing != null) photoFrame.close()
+        wakeUp.refresh()
+        showChipsOnHome()
+    }
+
+    private fun chooseRadio() {
+        val playing = RadioCenter.station
+        val names = Stations.ALL.map { it.name } + listOfNotNull(playing?.let { tr("Stop the radio", "Arrêter la radio") })
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Light_Dialog_Alert)
+            .setTitle("Radio")
+            .setItems(names.toTypedArray()) { _, which ->
+                val station = Stations.ALL.getOrNull(which)
+                if (station == null) RadioCenter.stop() else RadioCenter.play(this, station)
+            }
+            .setNegativeButton(tr("Close", "Fermer"), null)
+            .show()
+    }
+
+    override fun openUrl(url: String, title: String?) {
+        photoFrame.close()
+        page.bottomRoom = conversation.isOpen || phone.isOpen
+        page.open(url, title)
+    }
+
+    /** "More": the Feed, messages, photo, radio and apps, depending on what is allowed. */
     private fun showMore() {
         val tiles = buildList {
             if (settings.screenAllowed) add(HubPanel.Tile(R.drawable.ic_feed, tr("Feed", "Fil")) { feed.open() })
@@ -321,6 +458,7 @@ class KioskActivity : Activity(), ScreenPresenter {
                 add(HubPanel.Tile(R.drawable.ic_history, "Messages") { conversation.showHistory() })
             }
             if (settings.cameraAllowed) add(HubPanel.Tile(R.drawable.ic_camera, "Photo", ::look))
+            add(HubPanel.Tile(R.drawable.ic_radio, "Radio", ::chooseRadio))
             if (settings.screenAllowed && AppStore.list(this@KioskActivity).isNotEmpty()) {
                 add(HubPanel.Tile(R.drawable.ic_apps, tr("Apps", "Applications")) { apps.showList() })
             }
@@ -396,7 +534,7 @@ class KioskActivity : Activity(), ScreenPresenter {
         if (dimNow) lastTouch = 0L
         conversation.refresh()
         showShortcutsOnHome()
-        conversation.refresh()
+        showCardsOnHome()
         feed.refresh()
         refreshAmbience()
     }
@@ -475,6 +613,7 @@ class KioskActivity : Activity(), ScreenPresenter {
     private fun quote(value: String?) = value?.let { "\"$it\"" } ?: "null"
 
     private fun woken(mic: WakeMic) {
+        page.close()
         listener?.stop()
         listener = null
         Chime.heard()
@@ -501,6 +640,7 @@ class KioskActivity : Activity(), ScreenPresenter {
             questions.isOpen -> Unit
             photos.isOpen -> photos.cancel()
             apps.isOpen -> apps.close()
+            page.isOpen -> if (!page.back()) page.close()
             feed.isOpen -> feed.close()
             hub.isOpen -> hub.close()
             photoFrame.isOpen -> photoFrame.close()
@@ -595,6 +735,13 @@ class KioskActivity : Activity(), ScreenPresenter {
                     }
                     return true
                 }
+                if (request.url.scheme == CARD_SCHEME || request.url.scheme == CHIP_SCHEME) {
+                    if (view.url == Settings.WELCOME_URL) {
+                        val target = request.url.schemeSpecificPart
+                        if (request.url.scheme == CARD_SCHEME) cardTouched(target) else chipTouched(target)
+                    }
+                    return true
+                }
                 if (request.url.scheme != SHORTCUT_SCHEME) return request.url.scheme !in listOf("http", "https")
                 // Only the built-in page can send a message in the user's name.
                 if (view.url == Settings.WELCOME_URL) {
@@ -619,6 +766,8 @@ class KioskActivity : Activity(), ScreenPresenter {
                 showShortcutsOnHome()
                 showListening()
                 showTimersOnHome()
+                showCardsOnHome()
+                showChipsOnHome()
             }
 
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {

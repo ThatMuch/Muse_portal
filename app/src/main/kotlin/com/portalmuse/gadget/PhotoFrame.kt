@@ -3,6 +3,7 @@ package com.portalmuse.gadget
 import android.app.Activity
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -11,15 +12,33 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextClock
+import java.io.File
 
 private const val PHOTO_MS = 20_000L
+private const val INFO_MS = 15_000L
 private const val FADE_MS = 1_200L
+private const val PHOTOS_BETWEEN = 2
 
-/** The photo frame: a slideshow and the time, as long as nobody touches the screen. */
+/** Something Muse wants noticed: a card, or a suggestion of its feed. */
+data class Info(
+    val kind: String, val icon: String?, val title: String, val text: String?, val important: Boolean = false,
+    val picture: File? = null,
+)
+
+/**
+ * The idle screen, as long as nobody touches it: the photos and the time, with what Muse has to say every two
+ * photos. Without photos, it shows that alone.
+ */
 class PhotoFrame(private val activity: Activity, root: FrameLayout) {
+    private sealed class Slide {
+        data class Photo(val file: File, val changed: Long, val caption: String?) : Slide()
+        data class News(val info: Info) : Slide()
+    }
+
     private val main = Handler(Looper.getMainLooper())
-    private var photos: Frame? = null
+    private var slides = emptyList<Slide>()
     private var index = 0
     private val next = Runnable { step() }
 
@@ -32,11 +51,17 @@ class PhotoFrame(private val activity: Activity, root: FrameLayout) {
         setTextColor(Color.WHITE)
         shadow(this)
     }
+    private val news = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        setPadding(dp(120), 0, dp(120), 0)
+    }
 
     private val panel = FrameLayout(activity).apply {
         setBackgroundColor(Color.BLACK)
         visibility = View.GONE
         addView(image, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(news, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.CENTER))
         addView(clock, placed(Gravity.BOTTOM or Gravity.START))
         addView(caption, placed(Gravity.BOTTOM or Gravity.END))
     }
@@ -47,15 +72,26 @@ class PhotoFrame(private val activity: Activity, root: FrameLayout) {
 
     val isOpen get() = panel.visibility == View.VISIBLE
 
-    /** No effect if those same photos are already playing. */
-    fun open(frame: Frame) {
-        val same = photos?.photos?.map { it.first to it.first.lastModified() } ==
-            frame.photos.map { it.first to it.first.lastModified() }
-        if (isOpen && same) return
-        photos = frame
+    /** No effect if the same slides are already playing. */
+    fun open(frame: Frame?, infos: List<Info>) {
+        val wanted = arrange(frame?.photos.orEmpty().map { Slide.Photo(it.first, it.first.lastModified(), it.second) }, infos)
+        if (wanted.isEmpty()) return close()
+        if (isOpen && wanted == slides) return
+        slides = wanted
         index = 0
         panel.visibility = View.VISIBLE
         render()
+    }
+
+    private fun arrange(photos: List<Slide.Photo>, infos: List<Info>): List<Slide> {
+        if (infos.isEmpty()) return photos
+        if (photos.isEmpty()) return infos.map { Slide.News(it) }
+        // Enough rounds for every photo and every piece of news to come by.
+        val rounds = maxOf(infos.size, (photos.size + PHOTOS_BETWEEN - 1) / PHOTOS_BETWEEN)
+        return (0 until rounds).flatMap { round ->
+            (0 until PHOTOS_BETWEEN).map { photos[(round * PHOTOS_BETWEEN + it) % photos.size] } +
+                Slide.News(infos[round % infos.size])
+        }
     }
 
     fun close() {
@@ -63,24 +99,58 @@ class PhotoFrame(private val activity: Activity, root: FrameLayout) {
         main.removeCallbacks(next)
         panel.visibility = View.GONE
         image.setImageDrawable(null)
-        photos = null
+        news.removeAllViews()
+        slides = emptyList()
     }
 
     private fun step() {
-        val count = photos?.photos?.size ?: return
-        index = (index + 1) % count
+        if (slides.isEmpty()) return
+        index = (index + 1) % slides.size
         render()
     }
 
     private fun render() {
-        val shown = photos?.photos ?: return
-        val (file, text) = shown[index % shown.size]
-        image.setImageBitmap(BitmapFactory.decodeFile(file.path))
-        image.alpha = 0f
-        image.animate().alpha(1f).setDuration(FADE_MS).start()
-        caption.text = text.orEmpty()
+        val slide = slides.getOrNull(index) ?: return
+        news.removeAllViews()
+        val shown: View
+        when (slide) {
+            is Slide.Photo -> {
+                image.setImageBitmap(BitmapFactory.decodeFile(slide.file.path))
+                caption.text = slide.caption.orEmpty()
+                shown = image
+            }
+            is Slide.News -> {
+                image.setImageDrawable(null)
+                caption.text = ""
+                write(slide.info)
+                shown = news
+            }
+        }
+        shown.alpha = 0f
+        shown.animate().alpha(1f).setDuration(FADE_MS).start()
         main.removeCallbacks(next)
-        main.postDelayed(next, PHOTO_MS)
+        if (slides.size > 1) main.postDelayed(next, if (slide is Slide.Photo) PHOTO_MS else INFO_MS)
+    }
+
+    private fun write(info: Info) {
+        fun line(text: String, size: Float, color: Int, top: Int) = Ui.label(activity, size, color).apply {
+            this.text = text
+            gravity = Gravity.CENTER
+            maxLines = 3
+            news.addView(this, Ui.spaced(activity, top = top))
+        }
+        info.picture?.let { file ->
+            val options = BitmapFactory.Options().apply { inSampleSize = 2 }
+            val view = ImageView(activity).apply {
+                setImageBitmap(BitmapFactory.decodeFile(file.path, options))
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+            news.addView(view, LinearLayout.LayoutParams(MATCH_PARENT, dp(260)))
+        }
+        line(info.kind, 20f, if (info.important) Ui.DANGER else Ui.ACCENT, 16)
+        if (info.picture == null) info.icon?.let { line(it, 72f, Color.WHITE, 8) }
+        line(info.title, 44f, Color.WHITE, 8).typeface = Typeface.DEFAULT_BOLD
+        info.text?.let { line(it, 28f, Ui.MUTED, 12) }
     }
 
     private fun shadow(view: android.widget.TextView) {
@@ -94,4 +164,6 @@ class PhotoFrame(private val activity: Activity, root: FrameLayout) {
         val margin = Ui.dp(activity, 16)
         setMargins(margin, margin, margin, margin)
     }
+
+    private fun dp(value: Int) = Ui.dp(activity, value)
 }

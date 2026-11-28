@@ -285,7 +285,7 @@ class VideoCallTest {
 
     @Test fun aVolumeRequestEndsTheVideoCallWithoutPlayingTheReply() {
         edge.speak = false
-        assertEquals(CallResult.Ended(CallEnd.VOLUME), start(heard("Baisse le son."), level = 20).result())
+        assertEquals(CallResult.Ended(CallEnd.DONE_HERE), start(heard("Baisse le son."), level = 20).result())
     }
 
     @Test fun aWakeCallWithoutAnyReplyCloses() {

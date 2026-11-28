@@ -53,6 +53,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
         <service
             android:name=".GadgetService"
             android:exported="false"

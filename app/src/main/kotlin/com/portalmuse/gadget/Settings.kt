@@ -48,7 +48,20 @@ class Settings(context: Context) {
             .also { prefs.edit().putString("chat_session", it).apply() }
     }
 
-    fun forgetChatSession() = prefs.edit().remove("chat_session").apply()
+    fun forgetChatSession() = prefs.edit().remove("chat_session").remove("ambient_session").apply()
+
+    /** The conversation of the automatic screen updates, created once. */
+    fun ambientSession(): String = prefs.getString("ambient_session", null) ?: java.util.UUID.randomUUID().toString()
+        .also { prefs.edit().putString("ambient_session", it).apply() }
+
+    /** The Portal asks Muse for screen updates on its own. */
+    var proactive: Boolean
+        get() = prefs.getBoolean("proactive", true)
+        set(value) = prefs.edit().putBoolean("proactive", value).apply()
+
+    var proactiveDoneAt: Long
+        get() = prefs.getLong("proactive_done", 0)
+        set(value) = prefs.edit().putLong("proactive_done", value).apply()
 
     /** "Look at this" photos that are sent are also stored in Muse's files. */
     var keepPhotos: Boolean

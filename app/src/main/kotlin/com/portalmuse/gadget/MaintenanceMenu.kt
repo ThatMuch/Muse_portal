@@ -40,14 +40,20 @@ private val TEACH_SCREEN = tr(
         "say “on the Portal”, use its commands rather than my phone: display.show_page and display.show_images " +
         "to show things, display.notify for a banner, display.ask to ask for my approval, apps.save for a " +
         "small app, feed.set for my feed. During a call, when I ask for louder, quieter or a volume level, the " +
-        "Portal does it by itself and hangs up: you have nothing to do.",
+        "Portal does it by itself and hangs up: you have nothing to do. Without waiting for me to ask, show on " +
+        "the Portal what deserves my attention: home.set_cards for important appointments and reminders (also " +
+        "when I ask from my phone or computer), display.open_url to continue a page, alarm.set to wake me, " +
+        "radio.play for the radio.",
     "Retiens ceci : le gadget Portal Muse est un écran tactile de 10 pouces " +
         "posé chez moi. Ses appels te sont annoncés comme venant d'un accessoire portable, mais il a un grand écran. " +
         "Quand je te parle depuis lui ou que je dis « sur le Portal », utilise ses commandes plutôt que mon " +
         "téléphone : display.show_page et display.show_images pour montrer, display.notify pour une bannière, " +
         "display.ask pour me demander un accord, apps.save pour une petite appli, feed.set pour mon fil. " +
         "Pendant un appel, quand je demande plus fort, moins fort ou un niveau de volume, le Portal le fait " +
-        "lui-même puis raccroche : tu n'as rien à faire.",
+        "lui-même puis raccroche : tu n'as rien à faire. Sans attendre que je le demande, affiche sur le Portal " +
+        "ce qui mérite mon attention : home.set_cards pour mes rendez-vous importants et rappels (aussi quand " +
+        "je te le demande depuis mon téléphone ou mon ordinateur), display.open_url pour poursuivre une page, " +
+        "alarm.set pour me réveiller, radio.play pour la radio.",
 )
 
 /** The kiosk's maintenance menu. [reload] reloads the dashboard. */
@@ -208,6 +214,24 @@ class MaintenanceMenu(
                     screenMenu()
                 },
             )
+            if (settings.screenAllowed) {
+                add(
+                    Entry(tr(
+                        "Automatic updates from Muse: ${yes(settings.proactive)}",
+                        "Mises à jour automatiques de Muse : ${yes(settings.proactive)}",
+                    )) {
+                        settings.proactive = !settings.proactive
+                        screenMenu()
+                    },
+                )
+                add(Entry(tr("Update the screen now", "Mettre l'écran à jour maintenant")) {
+                    val sent = Proactive.check(activity, now = true)
+                    toast(
+                        if (sent) tr("Asked. The cards arrive in a few minutes.", "Demandé. Les cartes arrivent dans quelques minutes.")
+                        else tr("Muse is unreachable or already working on it.", "Muse est injoignable ou s'en occupe déjà."),
+                    )
+                })
+            }
             if (FrameStore.load(activity) != null) add(Entry(tr(
                 "Remove the frame photos",
                 "Retirer les photos du cadre",
@@ -278,6 +302,7 @@ class MaintenanceMenu(
         FrameStore.clear(activity)
         AppStore.clear(activity)
         FeedStore.clear(activity)
+        CardStore.clear(activity)
         settings.forgetChatSession()
         BleCentral.closeAll()
         settings.forgetBluetoothDevices()

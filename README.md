@@ -37,6 +37,12 @@ messages and suggestions, and a plain blue orb where your Muse's avatar appears.
   you choose to send.
 - **A screen your Muse can use**: pictures and pages, banners, approve / reject questions, an idle
   photo frame, night mode, a feed of suggestions, small sandboxed touch apps, timers and volume.
+- **Proactive**: a few times a day (07:00, 12:00, 17:00, 20:00) the Portal asks your Muse what deserves
+  the screen. Cards appear on the home screen, and between the photos of the idle screen with
+  suggestions from the feed. This can be turned off.
+- **One companion with your phone and computer**: ask your Muse, from anywhere, to leave a note or open
+  a web page on the Portal; send what is shown back to your phone with one touch.
+- **Wake-up alarms and radio**: alarms ring with a station or beeps; a fixed list of public streams.
 - **Bluetooth LE** (off by default): your Muse can reach nearby devices, each one approved on screen.
 
 ### Status
@@ -49,6 +55,7 @@ messages and suggestions, and a plain blue orb where your Muse's avatar appears.
 | Home screen, avatar, kiosk, restart after reboot, crash or update | Tried on a real device |
 | Banners, questions, small apps, timers by voice, feed update | Tried with a real Muse, after teaching it the screen |
 | Volume by voice | Tried on a real device |
+| Automatic updates, cards, web page hand-off, alarms, radio, other voice requests | New: unit tests, barely tried on a device |
 | Bluetooth, side chat | Unit tests only |
 | Token rotation | Unit tests only |
 | Other Portal models | Unknown |
@@ -123,6 +130,8 @@ information, and quit.
 | `timer.*`, `audio.volume` | Kitchen timers and speaker volume | always |
 | `display.show_images`, `show_page`, `close` | Pictures and static pages | screen |
 | `display.notify`, `display.ask` | Banner; approve / reject buttons | screen |
+| `home.set_cards`, `display.open_url` | Cards (home and idle screen); a public https web page | screen |
+| `alarm.*`, `radio.*` | Wake-up alarms; radio from a fixed list | always |
 | `display.night_mode`, `home.set_shortcuts`, `frame.set_photos` | Night, quick actions, photo frame | screen |
 | `feed.set`, `apps.*` | Feed page; small touch apps | screen |
 | `camera.capture` | One photo, only after two taps on screen | off by default |
@@ -159,9 +168,9 @@ tools/  Dependency download, token entry.
   message saying what the Portal can show. Your Muse's own permission requests stay on the phone: the
   gadget protocol has no way to answer them.
 - **Night mode** only turns the light off; the device stays online and listening.
-- **Volume by voice**: during a call, a short sentence such as "turn it up" or "set the volume to 50"
-  is applied by the Portal itself, which beeps and hangs up: a Muse does not always send
-  `audio.volume`, and tends to answer that it cannot.
+- **Handled by voice on the device**: during a call, a short sentence such as "turn it up", "stop the
+  timer", "play the radio", "night mode" or "stop the alarm" is carried out by the Portal itself, which
+  beeps and hangs up: a Muse does not always call the matching command.
 
 Logs, which never contain message contents or tokens:
 
@@ -178,6 +187,10 @@ adb logcat -s PortalMuse PortalMuseBle
 - No shell, file or microphone control is exposed to the Muse.
 - The screen is shared: an approve button can be tapped by anyone nearby, and the answer is not
   authenticated. Keep confirmations for money, messages or deletions on your phone.
+- Cards show personal information on a shared screen; turn the screen permission or the automatic
+  updates off if that matters. A web page opened with `display.open_url` runs scripts in a WebView
+  with no bridge to the app, no file, camera or microphone access, and only navigates to public https
+  addresses.
 - Pages and apps written by the Muse run in a WebView without network access. Pictures from the web
   must be `https` from public addresses; loading one reveals your home IP address to its host.
 - Cleartext HTTP is allowed for a local dashboard.

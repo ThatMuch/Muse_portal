@@ -28,7 +28,13 @@ private const val SLIDE_MS = 8_000L
  * What Muse shows: pictures as a slideshow (touch left or right, or swipe), or a page. Can always be closed
  * with a touch on "Close".
  */
-class ScreenOverlay(private val activity: Activity, root: FrameLayout, private val onVisibility: () -> Unit) {
+class ScreenOverlay(
+    private val activity: Activity,
+    root: FrameLayout,
+    /** Asks Muse to bring what is shown, under this heading, to the phone. */
+    private val onSend: (heading: String?) -> Unit,
+    private val onVisibility: () -> Unit,
+) {
     private val main = Handler(Looper.getMainLooper())
     private var pictures = emptyList<LoadedPicture>()
     private var index = 0
@@ -64,6 +70,18 @@ class ScreenOverlay(private val activity: Activity, root: FrameLayout, private v
         isClickable = true
         visibility = View.GONE
         addView(content, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(
+            Ui.pill(activity, tr("To my phone", "Sur mon téléphone"), Ui.SURFACE).apply {
+                setOnClickListener {
+                    val heading = title.text.toString().ifEmpty { null }
+                    close()
+                    onSend(heading)
+                }
+            },
+            FrameLayout.LayoutParams(WRAP_CONTENT, dp(64), Gravity.TOP or Gravity.END).apply {
+                setMargins(0, dp(24), dp(112), 0)
+            },
+        )
         addView(title, placed(Gravity.TOP or Gravity.START))
         addView(caption, placed(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         addView(counter, placed(Gravity.BOTTOM or Gravity.END))

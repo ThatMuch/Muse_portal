@@ -58,5 +58,6 @@ class PortalApp : Application() {
         super.onCreate()
         CrashRecorder.install(this)
         TimerCenter.init(this)
+        AlarmCenter.init(this)
     }
 }
