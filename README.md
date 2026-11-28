@@ -47,8 +47,8 @@ messages and suggestions, and a plain blue orb where your Muse's avatar appears.
 | Written and spoken replies, voice calls, video calls, "Hey Muse", goodbye hang-up | Tried on a real device |
 | Message history, photos you send, photo frame | Tried on a real device |
 | Home screen, avatar, kiosk, restart after reboot, crash or update | Tried on a real device |
-| Feed | Filled by a real Muse on request; the automatic update is new |
-| Banners, questions, small apps, timers by voice | Screens tried with fake data; a real Muse tends to answer on the phone instead |
+| Banners, questions, small apps, timers by voice, feed update | Tried with a real Muse, after teaching it the screen |
+| Volume by voice | Unit tests only |
 | Bluetooth, side chat | Unit tests only |
 | Token rotation | Unit tests only |
 | Other Portal models | Unknown |
@@ -159,6 +159,8 @@ tools/  Dependency download, token entry.
   message saying what the Portal can show. Your Muse's own permission requests stay on the phone: the
   gadget protocol has no way to answer them.
 - **Night mode** only turns the light off; the device stays online and listening.
+- **Volume by voice**: during a call, a short sentence such as "turn it up" or "set the volume to 50"
+  is applied by the Portal itself, as a Muse does not always send `audio.volume`.
 
 Logs, which never contain message contents or tokens:
 

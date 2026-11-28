@@ -286,6 +286,8 @@ class CallPanel(
                 line.text = if (event.final) event.text.trim() else line.text + event.text
                 render()
             }
+            // Already applied by the call; Android's slider shows the level.
+            is CallEvent.Volume -> Unit
             is CallEvent.Ignored -> {
                 avatar.state = AvatarView.State.IDLE
                 lines["user-${event.item}"]?.ignored = true

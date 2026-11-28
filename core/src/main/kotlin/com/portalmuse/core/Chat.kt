@@ -88,6 +88,8 @@ class MuseChat(
     private val stalledReplyMillis: Long = 20_000,
     /** A separate conversation; `null` for the main one, the phone's. */
     private val sideChat: String? = null,
+    /** How long a message may wait to be acknowledged: Muse answers only once its current task lets it. */
+    private val sendTimeoutMillis: Long = 200_000,
 ) {
     /** [spoken] asks for a reply that [speech] can read aloud. */
     fun sendText(
@@ -237,12 +239,13 @@ class MuseChat(
 
     private fun request(
         service: ServiceType, verb: String, path: String, body: ByteArray, contentType: String = "application/json",
+        timeoutMillis: Long = requestTimeoutMillis,
     ): Pair<Int, String> {
         val type = if (body.isEmpty()) emptyList() else listOf("Content-Type" to contentType)
         val stream = streams.open(service, verb, path, headers(*type.toTypedArray()), body)
         try {
-            val deadline = clock() + requestTimeoutMillis
-            val status = stream.awaitStatus(requestTimeoutMillis)
+            val deadline = clock() + timeoutMillis
+            val status = stream.awaitStatus(timeoutMillis)
             val response = ByteArrayOutputStream()
             while (true) {
                 val chunk = stream.read(POLL_MS) ?: break
@@ -280,7 +283,10 @@ class MuseChat(
             body.put("output_modality", if (spoken) "voice" else "text").put("device_id", deviceId)
             sideChat?.let { body.put("session_id", it) }
             val (status, response) = try {
-                request(ServiceType.DAEMON, "POST", "/chat/stream", body.toString().toByteArray())
+                request(
+                    ServiceType.DAEMON, "POST", "/chat/stream", body.toString().toByteArray(),
+                    timeoutMillis = sendTimeoutMillis,
+                )
             } catch (e: IOException) {
                 return ChatResult.Failed(ChatFailure.UNCERTAIN)
             }

@@ -50,6 +50,8 @@ sealed class CallEvent {
     data class Words(val text: String, val final: Boolean) : CallEvent()
     /** What Muse heard for a speech turn: an addition, or the whole text when [final]. */
     data class Heard(val item: String, val text: String, val final: Boolean) : CallEvent()
+    /** The caller asked aloud for another volume. */
+    data class Volume(val request: VolumeRequest) : CallEvent()
     /** Muse judged that this speech turn was not addressed to it: it will not answer. */
     data class Ignored(val item: String) : CallEvent()
 }
@@ -65,6 +67,8 @@ sealed class CallResult {
 }
 
 private class CallProblem(val failure: CallFailure, message: String, val status: Int? = null) : Exception(message)
+
+private const val MAX_VOLUME_ITEMS = 200
 
 /**
  * A real-time voice call, on a connection reserved for voice. Half duplex: the microphone is muted while Muse
@@ -121,6 +125,7 @@ class VoiceCall(
     /** Start of the ongoing speech, as long as the server has neither closed nor dropped it. */
     private var speakingSince: Long? = null
     private var turnHeard = false
+    private val volumeItems = HashSet<String>()
     /** Diagnostic counters: types and quantities, never content. */
     private val receivedTypes = LinkedHashMap<String, Int>()
     private var sentFrames = 0
@@ -327,6 +332,12 @@ class VoiceCall(
         val item = identifier(event.opt("item_id")) ?: return
         val text = (event.opt(field) as? String)?.takeIf { it.isNotEmpty() && it.length <= MAX_HELD_TEXT_CHARS } ?: return
         onEvent(CallEvent.Heard(item, text, final))
+        if (final && volumeItems.size < MAX_VOLUME_ITEMS && volumeItems.add(item)) {
+            VolumeRequest.parse(text)?.let {
+                log("volume asked aloud")
+                onEvent(CallEvent.Volume(it))
+            }
+        }
     }
 
     /** Field names, and the value of reason codes only. Never free text. */

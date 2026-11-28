@@ -3,7 +3,6 @@ package com.portalmuse.gadget
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -30,7 +29,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.roundToInt
 
 private const val TAG = "PortalMuse"
 private const val MAX_FILE_BYTES = 12 * 1024 * 1024
@@ -188,18 +186,9 @@ class ScreenBridge(context: Context) : ScreenHost, AssistantHost, CameraHost, Ho
 
     override fun cancelTimers(id: Int?) = TimerCenter.cancel(id)
 
-    private val audio get() = context.getSystemService(AudioManager::class.java)
+    override fun volume() = Loudness.percent(context)
 
-    override fun volume(): Int {
-        val maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        return (audio.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / maximum).roundToInt()
-    }
-
-    override fun setVolume(percent: Int): Int {
-        val maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        audio.setStreamVolume(AudioManager.STREAM_MUSIC, (percent * maximum / 100f).roundToInt(), 0)
-        return volume()
-    }
+    override fun setVolume(percent: Int) = Loudness.set(context, percent)
 
     override fun save(app: AppInfo, html: String) = AppStore.save(context, app, html).also { if (it) changed() }
 

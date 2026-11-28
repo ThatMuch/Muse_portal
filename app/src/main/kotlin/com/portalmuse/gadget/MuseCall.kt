@@ -119,7 +119,7 @@ class MuseCall(
                     session, pairing.nodeId, audio,
                     idleTimeoutMillis = IDLE_HANG_UP_MS,
                     firstTurnTimeoutMillis = WAKE_FIRST_TURN_MS.takeIf { wakeMic != null },
-                    onEvent = onEvent, log = log,
+                    onEvent = ::event, log = log,
                 )
                 call = voice
                 if (cancelled) voice.hangUp()
@@ -138,7 +138,7 @@ class MuseCall(
         silentSpeaker = audio.silentSpeaker
         try {
             val created = VideoCall(
-                link, nodeId, audio, onVideo = screen::push, onEvent = onEvent,
+                link, nodeId, audio, onVideo = screen::push, onEvent = ::event,
                 firstTurnTimeoutMillis = WAKE_VIDEO_FIRST_MS.takeIf { wakeMic != null }, log = log,
                 museName = Settings(context).museName,
             )
@@ -150,6 +150,12 @@ class MuseCall(
             screen.onNeedKeyframe = {}
             audio.release()
         }
+    }
+
+    /** The volume is set here; the screen gets everything else too. */
+    private fun event(event: CallEvent) {
+        if (event is CallEvent.Volume) Loudness.apply(context, event.request)
+        onEvent(event)
     }
 
     private fun hungUp() = Outcome.Finished(CallResult.Ended(com.portalmuse.core.CallEnd.HUNG_UP))

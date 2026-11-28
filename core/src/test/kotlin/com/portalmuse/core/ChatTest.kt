@@ -72,13 +72,18 @@ class ChatTest {
         )
     }
 
-    private fun connect(vm: FakeVm, stalled: Long = 20_000): MuseChat {
+    private fun connect(
+        vm: FakeVm, stalled: Long = 20_000, requestTimeout: Long = 60_000, sendTimeout: Long = 200_000,
+    ): MuseChat {
         val registered = CountDownLatch(1)
         val created = LinkSession(vm, device, commands, executor, onRegistered = { registered.countDown() })
         session = created
         executor.execute { created.run() }
         assertTrue(registered.await(5, TimeUnit.SECONDS))
-        return MuseChat(created, "homelink-abcdef", replyTimeoutMillis = 3_000, stalledReplyMillis = stalled)
+        return MuseChat(
+            created, "homelink-abcdef", replyTimeoutMillis = 3_000, stalledReplyMillis = stalled,
+            requestTimeoutMillis = requestTimeout, sendTimeoutMillis = sendTimeout,
+        )
     }
 
     @Test fun textGoesToTheMainChatAndTheReplyStreamsBack() {
@@ -100,6 +105,29 @@ class ChatTest {
         assertTrue("sans session_id : la conversation principale", !body.has("session_id"))
         assertTrue(progress.any { it.text == "Bonjour !" })
         assertEquals(subscribe.streamId, vm.resets.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test fun aBusyMuseMayAcknowledgeAMessageLate() {
+        var subscription = 0L
+        val vm = FakeVm(
+            onRequest = { call ->
+                when (call.path) {
+                    "/chat/subscribe" -> {
+                        subscription = call.streamId
+                        sendFrame(ServiceFrame.Response(call.streamId, 200))
+                    }
+                    "/chat/stream" -> executor.execute {
+                        Thread.sleep(900)
+                        val ack = JSONObject().put("result", JSONObject().put("message_id", "u1"))
+                        sendFrame(ServiceFrame.Response(call.streamId, 200, ack.toString().toByteArray(), endBody = true))
+                        push(subscription, *answer())
+                    }
+                }
+            },
+            onMessage = { send(JSONObject().put("id", it.getString("id")).put("ok", true)) },
+        )
+        val result = connect(vm, requestTimeout = 300, sendTimeout = 5_000).sendText("Salut")
+        assertEquals("Bonjour !", (result as ChatResult.Answer).text)
     }
 
     @Test fun aSpokenRequestAsksForAVoiceReplyAndNamesItsMessages() {

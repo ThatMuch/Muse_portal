@@ -34,6 +34,7 @@ private const val GOODBYE_WAIT_MS = 6_000L
 private const val GOODBYE_SETTLE_MS = 1_500L
 /** The transcription arrives a few seconds after the speech. */
 private const val OWN_SPEECH_MS = 12_000L
+private const val SAME_REQUEST_MS = 5_000L
 private const val HEARD = "conversation.item.input_audio_transcription.completed"
 private const val MAX_EVENT_BYTES = 256 * 1024
 private const val MAX_QUEUED_PACKETS = 250 // 5 s
@@ -87,6 +88,7 @@ class VideoCall(
     @Volatile private var media: MediaSession? = null
     @Volatile private var stopAsked = 0L
     @Volatile private var goodbyeAt = 0L
+    private var volumeAsked: Pair<VolumeRequest, Long>? = null
     /** Last time someone spoke in front of this device. */
     @Volatile private var spokeAt = 0L
     private var events: MuseStream? = null
@@ -343,6 +345,7 @@ class VideoCall(
         if (shapes.size < 14 && shapes.add(shape)) log("shape of a voice event (call recognized: $ours): $shape")
         val here = ours || spokeAt != 0L && clock() - spokeAt < OWN_SPEECH_MS
         for (item in VoiceEvents.objects(event)) {
+            if (here && item.opt("type") == HEARD) (item.opt("transcript") as? String)?.let(::volume)
             val stop = item.opt("type") == "session_control" &&
                 (item.opt("name") as? String)?.trim().equals("stop", ignoreCase = true)
             val goodbye = item.opt("type") == HEARD &&
@@ -366,10 +369,21 @@ class VideoCall(
         val said = listOf("display_text", "transcript", "content", "text")
             .firstNotNullOfOrNull { (payload.opt(it) as? String)?.takeIf { value -> value.isNotBlank() } } ?: return
         val here = spokeAt != 0L && clock() - spokeAt < OWN_SPEECH_MS
+        if (here) volume(said)
         if (here && goodbyeAt == 0L && Farewell.matches(said, museName)) {
             log("“goodbye” heard")
             goodbyeAt = clock()
         }
+    }
+
+    /** The same sentence arrives both as a transcription and as a message: it counts once. */
+    private fun volume(said: String) {
+        val request = VolumeRequest.parse(said, museName) ?: return
+        val last = volumeAsked
+        if (last != null && last.first == request && clock() - last.second < SAME_REQUEST_MS) return
+        volumeAsked = request to clock()
+        log("volume asked aloud")
+        onEvent(CallEvent.Volume(request))
     }
 
     /** A small request to the VM, which answers `{"ok":true,"result":{…}}`. */
