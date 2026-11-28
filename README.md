@@ -48,7 +48,7 @@ messages and suggestions, and a plain blue orb where your Muse's avatar appears.
 | Message history, photos you send, photo frame | Tried on a real device |
 | Home screen, avatar, kiosk, restart after reboot, crash or update | Tried on a real device |
 | Banners, questions, small apps, timers by voice, feed update | Tried with a real Muse, after teaching it the screen |
-| Volume by voice | Unit tests only |
+| Volume by voice | Tried on a real device |
 | Bluetooth, side chat | Unit tests only |
 | Token rotation | Unit tests only |
 | Other Portal models | Unknown |
