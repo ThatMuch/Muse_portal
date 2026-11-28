@@ -311,8 +311,8 @@ class CallPanel(
     private fun ended(outcome: MuseCall.Outcome) {
         val result = (outcome as? MuseCall.Outcome.Finished)?.result
         val end = (result as? CallResult.Ended)?.end
-        // Hung up, or woken without a request: nothing to read.
-        if (end == CallEnd.HUNG_UP || end == CallEnd.NOTHING_ASKED) return close()
+        // Hung up, woken without a request, or only the volume to set: nothing to read.
+        if (end == CallEnd.HUNG_UP || end == CallEnd.NOTHING_ASKED || end == CallEnd.VOLUME) return close()
         if (videoCall && end == null) {
             // Video could not be set up: the same call carries on by voice. What was said after "Hey Muse" is
             // then lost.
@@ -361,6 +361,7 @@ class CallPanel(
                 )
                 CallEnd.TOO_LONG -> tr("Call ended: 5 minutes at most.", "Appel terminé : 5 minutes au maximum.")
                 CallEnd.GOODBYE -> tr("Goodbye.", "Au revoir.")
+                CallEnd.VOLUME -> tr("Volume set.", "Volume réglé.")
                 CallEnd.NOTHING_ASKED -> tr(
                     "No request heard: call ended.",
                     "Aucune demande entendue : appel terminé.",

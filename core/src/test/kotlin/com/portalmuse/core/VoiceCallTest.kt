@@ -306,6 +306,17 @@ class VoiceCallTest {
         assertEquals(CallResult.Ended(CallEnd.IDLE), result())
     }
 
+    @Test fun aVolumeRequestEndsTheCall() = with(Run()) {
+        connect()
+        server(
+            event("conversation.item.input_audio_transcription.completed").put("item_id", "v")
+                .put("transcript", "Mets le volume à 50"),
+        )
+        endCall()
+        assertEquals(CallResult.Ended(CallEnd.VOLUME), result())
+        assertTrue(CallEvent.Volume(VolumeRequest.Level(50)) in events)
+    }
+
     /** False alarm of the wake word: noise, but no request recognized. */
     @Test fun aWakeCallWithoutAnyRequestEndsQuickly() = with(Run(firstTurn = 500)) {
         connect()

@@ -56,8 +56,11 @@ sealed class CallEvent {
     data class Ignored(val item: String) : CallEvent()
 }
 
-/** [NOTHING_ASKED]: no request heard after a call opened by the wake word. */
-enum class CallEnd { REMOTE_END, REMOTE_STOP, HUNG_UP, IDLE, TOO_LONG, NOTHING_ASKED, GOODBYE }
+/**
+ * [NOTHING_ASKED]: no request heard after a call opened by the wake word. [VOLUME]: the caller asked for another
+ * volume, which the device applies before hanging up.
+ */
+enum class CallEnd { REMOTE_END, REMOTE_STOP, HUNG_UP, IDLE, TOO_LONG, NOTHING_ASKED, GOODBYE, VOLUME }
 
 enum class CallFailure { REFUSED, NOT_READY, PROTOCOL, CONNECTION }
 
@@ -138,6 +141,7 @@ class VoiceCall(
     @Volatile private var ready = false
     @Volatile private var ended = false
     @Volatile private var hungUp = false
+    @Volatile private var volumeDone = false
     @Volatile private var workerFailure: CallProblem? = null
 
     /** Hangs up. */
@@ -255,6 +259,7 @@ class VoiceCall(
         workerFailure?.let { throw it }
         val now = clock()
         if (hungUp) return CallEnd.HUNG_UP
+        if (volumeDone) return CallEnd.VOLUME
         if (now - started >= overallTimeoutMillis) return CallEnd.TOO_LONG
         if (!ready && now - started >= minOf(readyTimeoutMillis, overallTimeoutMillis)) {
             throw CallProblem(CallFailure.NOT_READY, "the call did not start in time")
@@ -339,6 +344,9 @@ class VoiceCall(
             VolumeRequest.parse(text)?.let {
                 log("volume asked aloud")
                 onEvent(CallEvent.Volume(it))
+                // Nothing left to say: the reply is cut off and the call ends.
+                interrupt()
+                volumeDone = true
             }
         }
     }

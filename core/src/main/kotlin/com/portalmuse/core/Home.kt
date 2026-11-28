@@ -35,7 +35,7 @@ class HomeCommands(private val host: HomeHost) : CommandSet {
         VOLUME to Specs.of(
             "Read or change the loudness of the device speaker. Without parameters it only reports it. During " +
                 "a call from this device, the device itself applies a spoken request such as louder, quieter or " +
-                "a level: just agree briefly, do not call this command and do not say it cannot be done.",
+                "a level, then ends the call: there is nothing for you to do.",
             JSONObject(),
             JSONObject()
                 .put("percent", Specs.field("integer", "Set it, 0 to 100."))

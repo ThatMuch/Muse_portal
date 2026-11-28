@@ -89,6 +89,7 @@ class VideoCall(
     @Volatile private var stopAsked = 0L
     @Volatile private var goodbyeAt = 0L
     private var volumeAsked: Pair<VolumeRequest, Long>? = null
+    @Volatile private var volumeDone = false
     /** Last time someone spoke in front of this device. */
     @Volatile private var spokeAt = 0L
     private var events: MuseStream? = null
@@ -243,7 +244,8 @@ class VideoCall(
                             while (loud.isNotEmpty() && clock() - loud.first() > SUSTAINED_MS) loud.removeFirst()
                             if (loud.size >= SUSTAINED) activity = clock()
                         }
-                        audio.play(pcm)
+                        // After a volume request the call is ending: the reply to it is not started.
+                        if (!volumeDone) audio.play(pcm)
                     }
                 }
                 val now = clock() < playingUntil
@@ -263,6 +265,7 @@ class VideoCall(
         while (true) {
             val now = clock()
             if (hungUp) return CallEnd.HUNG_UP
+            if (volumeDone) return CallEnd.VOLUME
             if (session.lost || now - session.lastMediaAt > mediaTimeoutMillis) {
                 // Muse hanging up cuts its media; without any packet at all, it is the connection.
                 if (session.stats.audioPackets + session.stats.videoFrames > 0) return CallEnd.REMOTE_END
@@ -388,6 +391,7 @@ class VideoCall(
         volumeAsked = request to clock()
         log("volume asked aloud")
         onEvent(CallEvent.Volume(request))
+        volumeDone = true
     }
 
     /** A small request to the VM, which answers `{"ok":true,"result":{…}}`. */
